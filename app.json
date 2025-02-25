@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "kredi-hesaplama",
-    "slug": "kredi-hesaplama",
+    "slug": "bankaci-kredi-hesaplama",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,13 +9,20 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.xewor.bankacikredihesaplama",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.xewor.bankacikredihesaplama",
+      "versionCode": 1,
+      "targetSdkVersion": 34
     },
     "web": {
       "bundler": "metro",
@@ -27,7 +34,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/splash.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -36,6 +43,18 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "tabs": {
+      "enabled": false
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "f5c8092a-cb6e-4bbc-b316-aad23f8d0e87"
+      }
+    },
+    "owner": "xewor"
   }
 }
