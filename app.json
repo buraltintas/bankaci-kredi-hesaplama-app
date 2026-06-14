@@ -22,7 +22,7 @@
         "backgroundColor": "#0B6EF3"
       },
       "package": "com.xewor.bankacikredihesaplama",
-      "versionCode": 2
+      "versionCode": 5
     },
     "web": {
       "bundler": "metro",
