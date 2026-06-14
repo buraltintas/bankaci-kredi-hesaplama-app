@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pod install)",
+      "Bash(xcrun simctl:*)",
+      "Bash(# Simulator crash logs are in a different location find ~/Library/Developer/CoreSimulator/Devices/769AB144-4508-40EC-B76A-E03BC7485535/data/Library/Logs/DiagnosticReports/ -name \"\"*.ips\"\" -o -name \"\"*.crash\"\")",
+      "Bash(npx expo run:ios:*)",
+      "Bash(python3:*)",
+      "Bash(head -10 grep -n 'window\\\\|UIWindow' /Users/burakaltintas/Documents/bankaci-kredi-hesaplama-app/ios/Pods/Headers/Public/EXAppDelegateWrapper/EXAppDelegateWrapper.h)",
+      "Bash(head -3 grep -r 'UIWindow\\\\|window' /Users/burakaltintas/Documents/bankaci-kredi-hesaplama-app/ios/Pods/Headers/Public/React-RCTAppDelegate/)",
+      "Bash(# First check if Xcode logs show any clue when we build with -showBuildTimingSummary # Actually, let''s look at what RCTAppDelegate.loadReactNativeWindow does with the window # We confirmed _window is used directly in RCTAppDelegate.mm # Check if EXAppDelegateWrapper redeclares window find /Users/burakaltintas/Documents/bankaci-kredi-hesaplama-app/ios/Pods -path \"\"*/expo-modules-core/*\"\" -name \"\"EXAppDelegateWrapper.h\"\" | xargs grep -n ''window\\\\|UIWindow'')",
+      "Bash(# Check what''s actually in the compiled app - look at Xcode build products ls ~/Library/Developer/Xcode/DerivedData/kredihesaplama-*/Build/Products/Release-iphonesimulator/)",
+      "Bash(# What does expo prebuild generate? Check the prebuild template find /Users/burakaltintas/Documents/bankaci-kredi-hesaplama-app/node_modules -name \"\"bare-workflow\"\" -type d)",
+      "Bash(xargs ls:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}
