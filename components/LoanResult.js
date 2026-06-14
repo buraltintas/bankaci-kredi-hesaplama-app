@@ -257,6 +257,8 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: spacing.md,
+    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
   },
   secondaryButton: {
     alignItems: 'center',
