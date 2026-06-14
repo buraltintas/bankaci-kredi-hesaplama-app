@@ -1,112 +1,354 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ViewShot from 'react-native-view-shot';
 import { Feather } from '@expo/vector-icons';
-import { formatMoney } from '../utils/formatters';
+import { colors, radius, shadows, spacing, typography } from '../src/design/tokens';
+import { formatCurrency } from '../src/utils/formatCurrency';
+import { formatDate } from '../src/utils/dateMath';
 
-const LoanResult = ({
-  resultRef,
-  monthlyPayment,
-  amount,
-  term,
-  interestRate,
-  kkdf,
-  bsmv,
-  onShare,
-}) => {
-  const formattedAmount = formatMoney(
-    parseFloat(amount.replace(/\./g, '').replace(',', '.'))
+const SummaryMetric = ({ label, value, highlighted }) => (
+  <View style={[styles.metric, highlighted && styles.highlightMetric]}>
+    <Text style={[styles.metricLabel, highlighted && styles.highlightLabel]}>
+      {label}
+    </Text>
+    <Text style={[styles.metricValue, highlighted && styles.highlightValue]}>
+      {value}
+    </Text>
+  </View>
+);
+
+const ScheduleRow = ({ item }) => (
+  <View style={styles.scheduleRow}>
+    <View style={styles.scheduleHeader}>
+      <Text style={styles.scheduleNumber}>{item.installmentNumber}. Taksit</Text>
+      <Text style={styles.scheduleDate}>{formatDate(item.date)}</Text>
+    </View>
+    <View style={styles.scheduleGrid}>
+      <Text style={styles.scheduleCell}>Taksit: {formatCurrency(item.installment)}</Text>
+      <Text style={styles.scheduleCell}>Anapara: {formatCurrency(item.principal)}</Text>
+      <Text style={styles.scheduleCell}>Faiz: {formatCurrency(item.interest)}</Text>
+      <Text style={styles.scheduleCell}>KKDF: {formatCurrency(item.kkdf)}</Text>
+      <Text style={styles.scheduleCell}>BSMV: {formatCurrency(item.bsmv)}</Text>
+      <Text style={styles.scheduleCell}>Kalan: {formatCurrency(item.remainingPrincipal)}</Text>
+    </View>
+  </View>
+);
+
+const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled = false }) => {
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const previewSchedule = useMemo(
+    () => (isScheduleOpen ? result.schedule : []),
+    [isScheduleOpen, result.schedule]
   );
+  const hasBrokenPeriod = result.brokenPeriod.diffDays !== 0;
 
   return (
     <>
       <ViewShot ref={resultRef} options={{ format: 'jpg', quality: 0.9 }}>
         <View style={styles.resultContainer}>
-          <Text style={styles.resultLabel}>Kredi Tutarı:</Text>
-          <Text style={styles.resultValue}>{formattedAmount}</Text>
-
-          <Text style={styles.resultLabel}>Vade:</Text>
-          <Text style={styles.resultValue}>{term} Ay</Text>
-
-          <Text style={styles.resultLabel}>Aylık Taksit Tutarı:</Text>
-          <Text style={styles.resultValue}>{formatMoney(monthlyPayment)}</Text>
-
-          <Text style={styles.resultLabel}>Toplam Geri Ödeme:</Text>
-          <Text style={styles.resultValue}>
-            {formatMoney(monthlyPayment * parseFloat(term))}
-          </Text>
-
-          <View style={styles.infoContainer}>
-            <Text style={styles.info}>Faiz Oranı: %{interestRate}</Text>
+          <View style={styles.heroResult}>
+            <Text style={styles.heroLabel}>Aylık Taksit</Text>
+            <Text style={styles.heroValue}>
+              {formatCurrency(result.standardInstallment)}
+            </Text>
+            <Text style={styles.heroSubValue}>
+              İlk taksit {formatCurrency(result.firstInstallment)}
+            </Text>
           </View>
-          <View style={styles.infoContainer}>
-            <Text style={styles.info}>KKDF: %{kkdf}</Text>
-            <Text style={styles.info}>BSMV: %{bsmv}</Text>
+
+          <View style={styles.metricsGrid}>
+            <SummaryMetric
+              label="Kredi Tutarı"
+              value={formatCurrency(result.input.principal)}
+              highlighted
+            />
+            <SummaryMetric label="Vade" value={`${result.input.term} ay`} />
+            <SummaryMetric
+              label="Aylık Faiz Oranı"
+              value={`%${result.input.monthlyInterestRatePercent.toLocaleString('tr-TR', {
+                maximumFractionDigits: 4,
+              })}`}
+            />
+            <SummaryMetric label="Toplam Faiz" value={formatCurrency(result.totalInterest)} />
+            <SummaryMetric label="Toplam BSMV" value={formatCurrency(result.totalBsmv)} />
+            <SummaryMetric label="Toplam KKDF" value={formatCurrency(result.totalKkdf)} />
+            <SummaryMetric label="Toplam Ödeme" value={formatCurrency(result.totalPayment)} />
           </View>
+
+          <View style={styles.dateStrip}>
+            <View>
+              <Text style={styles.dateLabel}>Kullanım</Text>
+              <Text style={styles.dateValue}>{formatDate(result.input.creditUsageDate)}</Text>
+            </View>
+            <Feather name="arrow-right" size={18} color={colors.textMuted} />
+            <View>
+              <Text style={styles.dateLabel}>İlk Taksit</Text>
+              <Text style={styles.dateValue}>{formatDate(result.input.firstInstallmentDate)}</Text>
+            </View>
+          </View>
+
+          {hasBrokenPeriod ? (
+            <View style={styles.brokenBox}>
+              <Feather name="calendar" size={18} color={colors.warning} />
+              <View style={styles.brokenTextWrapper}>
+                <Text style={styles.brokenTitle}>
+                  Kırık dönem farkı sadece 1. taksite yansıtıldı.
+                </Text>
+                <Text style={styles.brokenText}>
+                  Gün farkı {result.brokenPeriod.diffDays}; faiz{' '}
+                  {formatCurrency(result.brokenPeriod.interestDiff)}, KKDF{' '}
+                  {formatCurrency(result.brokenPeriod.kkdfDiff)}, BSMV{' '}
+                  {formatCurrency(result.brokenPeriod.bsmvDiff)}.
+                </Text>
+              </View>
+            </View>
+          ) : null}
         </View>
       </ViewShot>
 
-      <TouchableOpacity
-        style={[styles.shareButton, styles.resultContainer]}
-        onPress={onShare}
-      >
-        <Feather name='share-2' size={24} color='#2196F3' />
-        <Text style={styles.shareButtonText}>Paylaş</Text>
-      </TouchableOpacity>
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={[styles.secondaryButton, isActionDisabled && styles.disabledButton]}
+          onPress={onShare}
+          disabled={isActionDisabled}
+        >
+          <Feather name="share-2" size={19} color={colors.primary} />
+          <Text style={styles.secondaryButtonText}>Paylaş</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.pdfButton, isActionDisabled && styles.disabledButton]}
+          onPress={onSharePdf}
+          disabled={isActionDisabled}
+        >
+          <Feather name="file-text" size={19} color={colors.surface} />
+          <Text style={styles.pdfButtonText}>PDF</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.scheduleCard}>
+        <TouchableOpacity
+          style={styles.scheduleToggle}
+          onPress={() => setIsScheduleOpen((value) => !value)}
+        >
+          <View>
+            <Text style={styles.sectionTitle}>Ödeme Planı</Text>
+            <Text style={styles.scheduleHint}>
+              {result.schedule.length} taksit detaylı amortisman tablosu
+            </Text>
+          </View>
+          <Feather
+            name={isScheduleOpen ? 'chevron-up' : 'chevron-down'}
+            size={24}
+            color={colors.primary}
+          />
+        </TouchableOpacity>
+
+        {previewSchedule.map((item) => (
+          <ScheduleRow key={item.installmentNumber} item={item} />
+        ))}
+      </View>
     </>
   );
 };
 
 const styles = StyleSheet.create({
   resultContainer: {
-    marginTop: 24,
-    marginBottom: 16,
-    padding: 16,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    gap: spacing.lg,
+    padding: spacing.lg,
+    ...shadows.card,
   },
-  resultLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 12,
-    marginBottom: 4,
+  heroResult: {
+    backgroundColor: colors.primaryDark,
+    borderRadius: radius.lg,
+    gap: spacing.xs,
+    padding: spacing.lg,
   },
-  resultValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2196F3',
+  heroLabel: {
+    color: '#BFD7EA',
+    fontSize: typography.small,
+    fontWeight: '800',
   },
-  infoContainer: {
+  heroValue: {
+    color: colors.surface,
+    fontSize: 30,
+    fontWeight: '900',
+  },
+  heroSubValue: {
+    color: '#DCEAF7',
+    fontSize: typography.small,
+    fontWeight: '700',
+  },
+  metricsGrid: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
-  info: {
-    color: '#666',
-    fontSize: 14,
+  metric: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.md,
+    flexBasis: '48%',
+    flexGrow: 1,
+    gap: spacing.xs,
+    padding: spacing.md,
   },
-  shareButton: {
-    backgroundColor: '#34C759',
-    padding: 16,
-    borderRadius: 8,
-    marginTop: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    flexDirection: 'row',
+  highlightMetric: {
+    backgroundColor: '#E7F5FF',
+  },
+  metricLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  highlightLabel: {
+    color: colors.primary,
+  },
+  metricValue: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  highlightValue: {
+    color: colors.primaryDark,
+  },
+  dateStrip: {
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: spacing.md,
   },
-  shareButtonText: {
-    color: '#2196F3',
-    fontSize: 18,
-    fontWeight: 'bold',
+  dateLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  dateValue: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: '900',
+  },
+  brokenBox: {
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF8E8',
+    borderColor: '#FFE8A3',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  brokenTextWrapper: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  brokenTitle: {
+    color: colors.warning,
+    fontSize: typography.small,
+    fontWeight: '900',
+  },
+  brokenText: {
+    color: colors.text,
+    fontSize: typography.small,
+    lineHeight: 18,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  secondaryButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'center',
+    minHeight: 50,
+  },
+  secondaryButtonText: {
+    color: colors.primary,
+    fontSize: typography.body,
+    fontWeight: '900',
+  },
+  pdfButton: {
+    alignItems: 'center',
+    backgroundColor: colors.success,
+    borderRadius: radius.md,
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'center',
+    minHeight: 50,
+  },
+  pdfButtonText: {
+    color: colors.surface,
+    fontSize: typography.body,
+    fontWeight: '900',
+  },
+  disabledButton: {
+    opacity: 0.55,
+  },
+  scheduleCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    gap: spacing.md,
+    padding: spacing.lg,
+    ...shadows.card,
+  },
+  scheduleToggle: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: typography.sectionTitle,
+    fontWeight: '900',
+  },
+  scheduleHint: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    fontWeight: '700',
+  },
+  scheduleRow: {
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  scheduleHeader: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceMuted,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: spacing.md,
+  },
+  scheduleNumber: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: '900',
+  },
+  scheduleDate: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: '900',
+  },
+  scheduleGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: spacing.md,
+  },
+  scheduleCell: {
+    color: colors.text,
+    flexBasis: '50%',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
   },
 });
 

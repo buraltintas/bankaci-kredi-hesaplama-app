@@ -1,56 +1,58 @@
 {
   "expo": {
-    "name": "kredi-hesaplama",
+    "name": "Kredi Hesaplama",
     "slug": "bankaci-kredi-hesaplama",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.xewor.bankacikredihesaplama",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B6EF3"
       },
       "package": "com.xewor.bankacikredihesaplama",
-      "versionCode": 1,
-      "targetSdkVersion": 34
+      "versionCode": 2
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "output": "single",
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "image": "./assets/splash.png",
+          "resizeMode": "cover",
+          "backgroundColor": "#F4FAFF",
+          "imageWidth": 320,
+          "ios": {
+            "image": "./assets/splash.png",
+            "resizeMode": "cover",
+            "backgroundColor": "#F4FAFF",
+            "enableFullScreenImage_legacy": true
+          },
+          "android": {
+            "image": "./assets/splash.png",
+            "resizeMode": "cover",
+            "backgroundColor": "#F4FAFF"
+          }
         }
-      ]
+      ],
+      "expo-asset"
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
-    "tabs": {
-      "enabled": false
-    },
     "extra": {
-      "router": {
-        "origin": false
-      },
       "eas": {
         "projectId": "f5c8092a-cb6e-4bbc-b316-aad23f8d0e87"
       }
