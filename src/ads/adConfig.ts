@@ -4,9 +4,7 @@ export type InterstitialActionName = 'share' | 'pdf';
 
 type SupportedAdPlatform = Extract<PlatformOSType, 'ios' | 'android'>;
 
-export const INTERSTITIAL_MIN_INTERVAL_MS = 3 * 60 * 1000;
 export const INTERSTITIAL_SHOW_TIMEOUT_MS = 60 * 1000;
-export const SKIP_FIRST_INTERSTITIAL_ACTION = true;
 export const ADS_ENABLED = true;
 
 export const ADMOB_APP_IDS: Record<SupportedAdPlatform, string> = {

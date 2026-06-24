@@ -1,12 +1,13 @@
 import type { InterstitialActionName } from './adConfig';
 
-const listeners: Record<string, ((payload?: unknown) => void)[]> = {};
+const mockListeners: Record<string, ((payload?: unknown) => void)[]> = {};
 let mockAdLoaded = false;
 let mockShow = jest.fn<Promise<void>, []>(() => {
-  createdAd?.emit('closed');
+  mockCreatedAd?.emit('closed');
   return Promise.resolve();
 });
-let createdAd: { emit: (event: string, payload?: unknown) => void } | null = null;
+let mockCreatedAd: { emit: (event: string, payload?: unknown) => void } | null = null;
+const mockCreatedAds: { load: jest.Mock<void, []>; emit: (event: string, payload?: unknown) => void }[] = [];
 let mockIsConnected = true;
 let mockIsInternetReachable: boolean | null = true;
 let mockAppOwnership: string | null = null;
@@ -47,22 +48,29 @@ jest.mock('react-native-google-mobile-ads', () => ({
   },
   InterstitialAd: {
     createForAdRequest: jest.fn(() => {
+      const load = jest.fn();
       const ad = {
         get loaded() {
           return mockAdLoaded;
         },
         addAdEventListener: jest.fn((event: string, callback: (payload?: unknown) => void) => {
-          listeners[event] = listeners[event] || [];
-          listeners[event].push(callback);
+          mockListeners[event] = mockListeners[event] || [];
+          mockListeners[event].push(callback);
+          return () => {
+            mockListeners[event] = mockListeners[event]?.filter(
+              (listener) => listener !== callback
+            ) ?? [];
+          };
         }),
-        load: jest.fn(),
+        load,
         show: mockShow,
       };
-      createdAd = {
+      mockCreatedAd = {
         emit: (event: string, payload?: unknown) => {
-          listeners[event]?.forEach((callback) => callback(payload));
+          mockListeners[event]?.forEach((callback) => callback(payload));
         },
       };
+      mockCreatedAds.push({ load, emit: mockCreatedAd.emit });
       return ad;
     }),
   },
@@ -96,19 +104,21 @@ const waitUntil = async (predicate: () => boolean): Promise<void> => {
 
 beforeEach(() => {
   jest.resetModules();
-  Object.keys(listeners).forEach((key) => {
-    delete listeners[key];
+  Object.keys(mockListeners).forEach((key) => {
+    delete mockListeners[key];
   });
-  createdAd = null;
+  mockCreatedAd = null;
+  mockCreatedAds.length = 0;
   mockAdLoaded = false;
   mockIsConnected = true;
   mockIsInternetReachable = true;
   mockAppOwnership = null;
   mockShow = jest.fn<Promise<void>, []>(() => {
-    createdAd?.emit('closed');
+    mockCreatedAd?.emit('closed');
     return Promise.resolve();
   });
   jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+  jest.spyOn(console, 'log').mockImplementation(() => undefined);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
 
@@ -148,67 +158,92 @@ test('runs action directly when offline', async () => {
   expect(mockShow).not.toHaveBeenCalled();
 });
 
-test('skips first eligible action and continues without blocking', async () => {
+test('preloads a single interstitial and skips duplicate requests while loading', async () => {
   const service = loadService();
-  const callback = jest.fn(() => Promise.resolve());
 
   await service.initializeInterstitialAds();
-  createdAd?.emit('loaded');
+  service.preloadInterstitialAd();
+  service.preloadInterstitialAd();
+
+  expect(mockCreatedAds).toHaveLength(1);
+  expect(mockCreatedAds[0].load).toHaveBeenCalledTimes(1);
+});
+
+test('skips duplicate preload requests while an ad is already ready', async () => {
+  const service = loadService();
+
+  await service.initializeInterstitialAds();
+  mockCreatedAd?.emit('loaded');
   mockAdLoaded = true;
+  service.preloadInterstitialAd();
+  service.preloadInterstitialAd();
+
+  expect(mockCreatedAds).toHaveLength(1);
+  expect(mockCreatedAds[0].load).toHaveBeenCalledTimes(1);
+});
+
+test('runs action directly when no interstitial is ready and keeps preload in flight', async () => {
+  const service = loadService();
+  const callback = jest.fn(() => Promise.resolve());
 
   await run(service, 'share', callback);
 
   expect(callback).toHaveBeenCalledTimes(1);
   expect(mockShow).not.toHaveBeenCalled();
+  expect(mockCreatedAds).toHaveLength(1);
+  expect(mockCreatedAds[0].load).toHaveBeenCalledTimes(1);
 });
 
-test.skip('shows loaded interstitial on later action then runs callback', async () => {
-  const service = loadService();
-  const firstCallback = jest.fn(() => Promise.resolve());
-  const secondCallback = jest.fn(() => Promise.resolve());
-
-  await service.initializeInterstitialAds();
-  createdAd?.emit('loaded');
-  mockAdLoaded = true;
-
-  await run(service, 'share', firstCallback);
-  await run(service, 'pdf', secondCallback);
-
-  expect(mockShow).toHaveBeenCalledTimes(1);
-  expect(secondCallback).toHaveBeenCalledTimes(1);
-});
-
-test.skip('frequency cap prevents back to back ads', async () => {
+test('shows loaded interstitial then runs callback and preloads the next ad', async () => {
   const service = loadService();
   const callback = jest.fn(() => Promise.resolve());
 
   await service.initializeInterstitialAds();
-  createdAd?.emit('loaded');
+  mockCreatedAd?.emit('loaded');
   mockAdLoaded = true;
 
-  await run(service, 'share', callback);
   await run(service, 'pdf', callback);
-  await run(service, 'share', callback);
 
   expect(mockShow).toHaveBeenCalledTimes(1);
-  expect(callback).toHaveBeenCalledTimes(3);
+  expect(callback).toHaveBeenCalledTimes(1);
+  expect(mockCreatedAds).toHaveLength(2);
+  expect(mockCreatedAds[1].load).toHaveBeenCalledTimes(1);
 });
 
-test.skip('show failure does not block action', async () => {
-  mockShow = jest.fn<Promise<void>, []>(() => Promise.reject(new Error('show failed')));
+test('shows every ready interstitial action without issuing extra loads', async () => {
   const service = loadService();
-  const firstCallback = jest.fn(() => Promise.resolve());
-  const secondCallback = jest.fn(() => Promise.resolve());
+  const callback = jest.fn(() => Promise.resolve());
 
   await service.initializeInterstitialAds();
-  createdAd?.emit('loaded');
+  mockCreatedAd?.emit('loaded');
   mockAdLoaded = true;
 
-  await run(service, 'share', firstCallback);
-  await run(service, 'pdf', secondCallback);
+  await run(service, 'share', callback);
+  expect(mockCreatedAds).toHaveLength(2);
+
+  mockCreatedAd?.emit('loaded');
+  mockAdLoaded = true;
+  await run(service, 'pdf', callback);
+
+  expect(mockShow).toHaveBeenCalledTimes(2);
+  expect(callback).toHaveBeenCalledTimes(2);
+  expect(mockCreatedAds).toHaveLength(3);
+});
+
+test('show failure does not block action and preloads another interstitial', async () => {
+  mockShow = jest.fn<Promise<void>, []>(() => Promise.reject(new Error('show failed')));
+  const service = loadService();
+  const callback = jest.fn(() => Promise.resolve());
+
+  await service.initializeInterstitialAds();
+  mockCreatedAd?.emit('loaded');
+  mockAdLoaded = true;
+
+  await run(service, 'pdf', callback);
 
   expect(mockShow).toHaveBeenCalledTimes(1);
-  expect(secondCallback).toHaveBeenCalledTimes(1);
+  expect(callback).toHaveBeenCalledTimes(1);
+  expect(mockCreatedAds).toHaveLength(2);
 });
 
 test('action lock prevents duplicate rapid actions', async () => {

@@ -1,18 +1,22 @@
 import MobileAds, { InterstitialAd, AdEventType } from 'react-native-google-mobile-ads';
 import {
   ADS_ENABLED,
-  INTERSTITIAL_MIN_INTERVAL_MS,
   INTERSTITIAL_SHOW_TIMEOUT_MS,
-  SKIP_FIRST_INTERSTITIAL_ACTION,
   getInterstitialAdUnitId,
   type InterstitialActionName,
 } from './adConfig';
 
 let currentAd: InterstitialAd | null = null;
 let adLoaded = false;
+let adLoading = false;
 let actionInProgress = false;
-let actionCount = 0;
-let lastShownAt = 0;
+
+const logInterstitialDebug = (message: string): void => {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    // eslint-disable-next-line no-console
+    console.log(`[Interstitial] ${message}`);
+  }
+};
 
 export const initializeInterstitialAds = async (): Promise<void> => {
   if (!ADS_ENABLED) return;
@@ -30,53 +34,80 @@ export const preloadInterstitialAd = (): void => {
   const adUnitId = getInterstitialAdUnitId();
   if (!adUnitId) return;
 
+  if (adLoading) {
+    logInterstitialDebug('Ad preload skipped: already loading');
+    return;
+  }
+
+  if (adLoaded && currentAd) {
+    logInterstitialDebug('Ad preload skipped: already ready');
+    return;
+  }
+
   try {
+    logInterstitialDebug('Ad preload requested');
     adLoaded = false;
+    adLoading = true;
     currentAd = InterstitialAd.createForAdRequest(adUnitId, {
       requestNonPersonalizedAdsOnly: false,
     });
-
-    const unsubLoaded = currentAd.addAdEventListener(AdEventType.LOADED, () => {
-      adLoaded = true;
+    const ad = currentAd;
+    let unsubLoaded: (() => void) | undefined;
+    let unsubError: (() => void) | undefined;
+    const cleanupLoadListeners = () => {
       unsubLoaded?.();
-    });
-
-    const unsubError = currentAd.addAdEventListener(AdEventType.ERROR, () => {
-      adLoaded = false;
       unsubError?.();
+      unsubLoaded = undefined;
+      unsubError = undefined;
+    };
+
+    unsubLoaded = ad.addAdEventListener(AdEventType.LOADED, () => {
+      if (currentAd !== ad) return;
+      adLoaded = true;
+      adLoading = false;
+      logInterstitialDebug('Ad loaded');
+      cleanupLoadListeners();
     });
 
-    currentAd.load();
+    unsubError = ad.addAdEventListener(AdEventType.ERROR, () => {
+      if (currentAd !== ad) return;
+      adLoaded = false;
+      adLoading = false;
+      currentAd = null;
+      logInterstitialDebug('Ad failed to load');
+      cleanupLoadListeners();
+    });
+
+    ad.load();
   } catch {
     adLoaded = false;
+    adLoading = false;
     currentAd = null;
   }
 };
 
 export const runActionWithOptionalInterstitial = async (
-  _actionName: InterstitialActionName,
+  actionName: InterstitialActionName,
   callback: () => Promise<void> | void
 ): Promise<void> => {
   if (actionInProgress) return;
   actionInProgress = true;
 
   try {
-    actionCount += 1;
-
-    const now = Date.now();
-    const cooldownActive = now - lastShownAt < INTERSTITIAL_MIN_INTERVAL_MS;
-    const isFirstAction = SKIP_FIRST_INTERSTITIAL_ACTION && actionCount === 1;
-    const canShowAd =
-      ADS_ENABLED && adLoaded && currentAd !== null && !cooldownActive && !isFirstAction;
+    logInterstitialDebug(`${actionName === 'pdf' ? 'PDF' : 'Share'} pressed`);
+    const canShowAd = ADS_ENABLED && adLoaded && currentAd !== null;
 
     if (canShowAd) {
       const ad = currentAd!;
       adLoaded = false;
+      adLoading = false;
       currentAd = null;
 
       try {
         await new Promise<void>((resolve) => {
           let settled = false;
+          let unsubClosed: (() => void) | undefined;
+          let unsubError: (() => void) | undefined;
 
           const settle = () => {
             if (settled) return;
@@ -87,23 +118,32 @@ export const runActionWithOptionalInterstitial = async (
 
           const timer = setTimeout(settle, INTERSTITIAL_SHOW_TIMEOUT_MS);
 
-          const unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
+          unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
             unsubClosed?.();
-            lastShownAt = Date.now();
+            unsubError?.();
+            logInterstitialDebug('Ad dismissed');
             settle();
-            setTimeout(() => preloadInterstitialAd(), 0);
           });
 
-          const unsubError = ad.addAdEventListener(AdEventType.ERROR, () => {
+          unsubError = ad.addAdEventListener(AdEventType.ERROR, () => {
+            unsubClosed?.();
             unsubError?.();
+            logInterstitialDebug('Ad show failed');
             settle();
           });
 
           try {
-            ad.show();
+            logInterstitialDebug('Ad shown');
+            void Promise.resolve(ad.show()).catch(() => {
+              unsubClosed?.();
+              unsubError?.();
+              logInterstitialDebug('Ad show failed');
+              settle();
+            });
           } catch {
             unsubClosed?.();
             unsubError?.();
+            logInterstitialDebug('Ad show failed');
             settle();
           }
         });
@@ -113,15 +153,16 @@ export const runActionWithOptionalInterstitial = async (
     }
 
     await callback();
+    logInterstitialDebug('PDF/share action continued');
   } finally {
     actionInProgress = false;
+    preloadInterstitialAd();
   }
 };
 
 export const __resetInterstitialServiceForTests = (): void => {
   currentAd = null;
   adLoaded = false;
+  adLoading = false;
   actionInProgress = false;
-  actionCount = 0;
-  lastShownAt = 0;
 };
