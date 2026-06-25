@@ -1,6 +1,12 @@
 import { calculateLoan } from '../../domain/loan/calculateLoan';
 import { createLoanPdfHtml } from '../createLoanPdfHtml';
 
+const formatCurrency = (value: number) =>
+  value.toLocaleString('tr-TR', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+
 describe('createLoanPdfHtml', () => {
   it('renders summary, table and broken period note', () => {
     const result = calculateLoan({
@@ -39,5 +45,50 @@ describe('createLoanPdfHtml', () => {
     expect(html).toContain('İletişim Bilgileri');
     expect(html).toContain('Ayşe &lt;Yılmaz&gt;');
     expect(html).toContain('0555 111 22 33');
+  });
+
+  it('renders prepaid interest plan details and the upfront row', () => {
+    const result = calculateLoan({
+      principal: 1000000,
+      term: 36,
+      monthlyInterestRatePercent: 3.1,
+      kkdfRatePercent: 0,
+      bsmvRatePercent: 0,
+      creditUsageDate: new Date(2026, 5, 24),
+      firstInstallmentDate: new Date(2026, 6, 24),
+      planType: 'prepaidInterest',
+      prepaidInterestAmount: 50000,
+    });
+    const html = createLoanPdfHtml(result);
+
+    expect(html).toContain('Ödeme Planı Tipi');
+    expect(html).toContain('Peşin Faiz Ödemeli');
+    expect(html).toContain('İndirimli faiz oranı');
+    expect(html).toContain('%2,759');
+    expect(html).toContain('0. taksit peşin faiz');
+    expect(html).toContain('<td>0</td>');
+    expect(html).toContain('49.862');
+  });
+
+  it('renders prepaid interest totals from the result model', () => {
+    const result = calculateLoan({
+      principal: 500000,
+      term: 24,
+      monthlyInterestRatePercent: 4.2,
+      kkdfRatePercent: 15,
+      bsmvRatePercent: 15,
+      creditUsageDate: new Date(2026, 5, 24),
+      firstInstallmentDate: new Date(2026, 6, 24),
+      planType: 'prepaidInterest',
+      prepaidInterestAmount: 25000,
+    });
+    const html = createLoanPdfHtml(result);
+
+    expect(result.schedule[0].kkdf).toBeCloseTo(3744.09, 2);
+    expect(result.schedule[0].bsmv).toBeCloseTo(3744.09, 2);
+    expect(html).toContain(formatCurrency(result.totalPayment));
+    expect(html).toContain('Toplam faiz / KKDF / BSMV');
+    expect(html).toContain(formatCurrency(result.totalKkdf));
+    expect(html).toContain(formatCurrency(result.totalBsmv));
   });
 });

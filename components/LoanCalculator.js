@@ -37,6 +37,10 @@ import { parseNumericInput } from '../src/utils/sanitizeNumericInput';
 const today = startOfLocalDay(new Date());
 const ACTION_BUTTON_HEIGHT = 54;
 const ACTION_BAR_VERTICAL_PADDING = spacing.lg;
+const PLAN_TYPE_LABELS = {
+  standard: 'Standart Sabit Taksitli',
+  prepaidInterest: 'Peşin Faiz Ödemeli',
+};
 
 const LoanCalculator = () => {
   const insets = useSafeAreaInsets();
@@ -50,6 +54,8 @@ const LoanCalculator = () => {
   const [bsmv, setBsmv] = useState('15');
   const [kkdf, setKkdf] = useState('15');
   const [term, setTerm] = useState('');
+  const [planType, setPlanType] = useState('standard');
+  const [prepaidInterestAmount, setPrepaidInterestAmount] = useState('');
   const [creditUsageDate, setCreditUsageDate] = useState(today);
   const [firstInstallmentDate, setFirstInstallmentDate] = useState(addMonths(today, 1));
   const [activeDatePicker, setActiveDatePicker] = useState(null);
@@ -152,6 +158,8 @@ const LoanCalculator = () => {
     bsmv,
     kkdf,
     term,
+    planType,
+    prepaidInterestAmount,
     creditUsageDate,
     firstInstallmentDate,
   });
@@ -163,6 +171,8 @@ const LoanCalculator = () => {
     setBsmv(formSnapshot.bsmv);
     setKkdf(formSnapshot.kkdf);
     setTerm(formSnapshot.term);
+    setPlanType(formSnapshot.planType ?? 'standard');
+    setPrepaidInterestAmount(formSnapshot.prepaidInterestAmount ?? '');
     setCreditUsageDate(formSnapshot.creditUsageDate);
     setFirstInstallmentDate(formSnapshot.firstInstallmentDate);
     setActiveDatePicker(null);
@@ -213,6 +223,7 @@ const LoanCalculator = () => {
     const kkdfRate = parseNumericInput(kkdf, 'decimal');
     const bsmvRate = parseNumericInput(bsmv, 'decimal');
     const termCount = parseNumericInput(term, 'integer');
+    const prepaidInterest = parseNumericInput(prepaidInterestAmount, 'money');
     if (!principal.isValid || !principal.value || principal.value <= 0) {
       throw new Error('Lütfen geçerli bir kredi tutarı girin.');
     }
@@ -229,6 +240,16 @@ const LoanCalculator = () => {
       throw new Error('KKDF ve BSMV oranları geçerli olmalıdır.');
     }
 
+    if (planType === 'prepaidInterest') {
+      if (!prepaidInterest.isValid || !prepaidInterest.value || prepaidInterest.value <= 0) {
+        throw new Error('Lütfen geçerli bir peşin faiz tutarı girin.');
+      }
+
+      if (prepaidInterest.value >= principal.value) {
+        throw new Error('Peşin faiz tutarı kredi tutarından küçük olmalıdır.');
+      }
+    }
+
     return {
       principal: principal.value,
       term: termCount.value,
@@ -237,6 +258,34 @@ const LoanCalculator = () => {
       bsmvRatePercent: bsmvRate.value,
       creditUsageDate,
       firstInstallmentDate,
+      planType,
+      prepaidInterestAmount:
+        planType === 'prepaidInterest' ? prepaidInterest.value : undefined,
+    };
+  };
+
+  const buildLoanInputFromRecentCalculation = (recentCalculation) => {
+    const recentPlanType = recentCalculation.form.planType ?? 'standard';
+    const prepaidInterest = parseNumericInput(
+      recentCalculation.form.prepaidInterestAmount ?? '',
+      'money'
+    );
+
+    return {
+      principal: recentCalculation.summary.principal,
+      term: recentCalculation.summary.term,
+      monthlyInterestRatePercent: Number(
+        recentCalculation.form.interestRate.replace(',', '.')
+      ),
+      kkdfRatePercent: Number(recentCalculation.form.kkdf.replace(',', '.')),
+      bsmvRatePercent: Number(recentCalculation.form.bsmv.replace(',', '.')),
+      creditUsageDate: recentCalculation.form.creditUsageDate,
+      firstInstallmentDate: recentCalculation.form.firstInstallmentDate,
+      planType: recentPlanType,
+      prepaidInterestAmount:
+        recentPlanType === 'prepaidInterest' && prepaidInterest.isValid
+          ? prepaidInterest.value
+          : undefined,
     };
   };
 
@@ -305,6 +354,7 @@ const LoanCalculator = () => {
         error instanceof Error
           ? error.message
           : 'Hesaplama sırasında bir hata oluştu.';
+      setResult(null);
       setFormError(message);
       Alert.alert('Kontrol edin', message);
     }
@@ -338,17 +388,9 @@ const LoanCalculator = () => {
   const handleOpenRecentCalculation = (recentCalculation) => {
     try {
       applyFormSnapshot(recentCalculation.form);
-      const nextResult = calculateLoan({
-        principal: recentCalculation.summary.principal,
-        term: recentCalculation.summary.term,
-        monthlyInterestRatePercent: Number(
-          recentCalculation.form.interestRate.replace(',', '.')
-        ),
-        kkdfRatePercent: Number(recentCalculation.form.kkdf.replace(',', '.')),
-        bsmvRatePercent: Number(recentCalculation.form.bsmv.replace(',', '.')),
-        creditUsageDate: recentCalculation.form.creditUsageDate,
-        firstInstallmentDate: recentCalculation.form.firstInstallmentDate,
-      });
+      const nextResult = calculateLoan(
+        buildLoanInputFromRecentCalculation(recentCalculation)
+      );
 
       setResult(nextResult);
       scrollToResultSoon();
@@ -363,19 +405,9 @@ const LoanCalculator = () => {
   const handleShareRecentCalculationPdf = async (recentCalculation) => {
     await runActionWithOptionalInterstitial('pdf', async () => {
       try {
-        const loanInput = {
-          principal: recentCalculation.summary.principal,
-          term: recentCalculation.summary.term,
-          monthlyInterestRatePercent: Number(
-            recentCalculation.form.interestRate.replace(',', '.')
-          ),
-          kkdfRatePercent: Number(recentCalculation.form.kkdf.replace(',', '.')),
-          bsmvRatePercent: Number(recentCalculation.form.bsmv.replace(',', '.')),
-          creditUsageDate: recentCalculation.form.creditUsageDate,
-          firstInstallmentDate: recentCalculation.form.firstInstallmentDate,
-        };
-
-        await shareResultPdf(calculateLoan(loanInput));
+        await shareResultPdf(
+          calculateLoan(buildLoanInputFromRecentCalculation(recentCalculation))
+        );
       } catch {
         Alert.alert(
           'PDF paylaşımı',
@@ -397,6 +429,15 @@ const LoanCalculator = () => {
           result.brokenPeriod.diffDays !== 0
             ? '\nİlk taksit tarihine bağlı kırık dönem farkı sadece 1. taksite yansıtılmıştır.'
             : '';
+        const prepaidInterestNote =
+          result.planType === 'prepaidInterest'
+            ? `\nÖdeme planı tipi: ${PLAN_TYPE_LABELS.prepaidInterest}
+İndirimli faiz oranı: %${(result.discountedMonthlyRate * 100).toLocaleString('tr-TR', {
+                maximumFractionDigits: 3,
+                minimumFractionDigits: 3,
+              })}
+0. taksit peşin faiz: ${formatCurrency(result.realizedPrepaidInterest ?? 0)}`
+            : `\nÖdeme planı tipi: ${PLAN_TYPE_LABELS.standard}`;
 
         await Share.share({
           title: 'Kredi Hesaplama Sonucu',
@@ -408,7 +449,7 @@ Faiz: %${result.input.monthlyInterestRatePercent}
 KKDF: %${result.input.kkdfRatePercent} | BSMV: %${result.input.bsmvRatePercent}
 İlk taksit: ${formatCurrency(result.firstInstallment)}
 Standart aylık taksit: ${formatCurrency(result.standardInstallment)}
-Toplam ödeme: ${formatCurrency(result.totalPayment)}${brokenPeriodNote}`,
+Toplam ödeme: ${formatCurrency(result.totalPayment)}${prepaidInterestNote}${brokenPeriodNote}`,
           url: Platform.OS === 'ios' ? uri : uri ? `file://${uri}` : undefined,
         });
       } catch {
@@ -550,6 +591,49 @@ Toplam ödeme: ${formatCurrency(result.totalPayment)}${brokenPeriodNote}`,
                 editable={loanType === 'Özel'}
               />
             </View>
+
+            <Text style={styles.label}>Ödeme Planı Tipi</Text>
+            <View style={styles.planTypeGroup}>
+              {Object.entries(PLAN_TYPE_LABELS).map(([type, label]) => {
+                const isSelected = planType === type;
+
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.planTypeOption,
+                      isSelected && styles.planTypeOptionSelected,
+                    ]}
+                    onPress={() => {
+                      setPlanType(type);
+                      clearResult();
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.planTypeText,
+                        isSelected && styles.planTypeTextSelected,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {planType === 'prepaidInterest' ? (
+              <NumericInput
+                label="Peşin Faiz Tutarı (TL)"
+                mode="money"
+                value={prepaidInterestAmount}
+                onChangeText={(value) => {
+                  setPrepaidInterestAmount(value);
+                  clearResult();
+                }}
+                placeholder="Örn. 50.000"
+              />
+            ) : null}
           </View>
 
           <View style={styles.card}>
@@ -756,6 +840,17 @@ Toplam ödeme: ${formatCurrency(result.totalPayment)}${brokenPeriodNote}`,
                           {recentCalculation.form.interestRate} faiz
                         </Text>
                         <Text style={styles.recentItemText}>
+                          {PLAN_TYPE_LABELS[
+                            recentCalculation.form.planType ?? 'standard'
+                          ]}
+                          {recentCalculation.form.planType === 'prepaidInterest'
+                            ? ` · Peşin ${formatCurrency(
+                                recentCalculation.summary
+                                  .realizedPrepaidInterest ?? 0
+                              )}`
+                            : ''}
+                        </Text>
+                        <Text style={styles.recentItemText}>
                           {formatDate(recentCalculation.form.creditUsageDate)} →{' '}
                           {formatDate(
                             recentCalculation.form.firstInstallmentDate
@@ -928,6 +1023,31 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   loanTypeTextSelected: {
+    color: colors.primaryDark,
+  },
+  planTypeGroup: {
+    gap: spacing.sm,
+  },
+  planTypeOption: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    minHeight: 46,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  planTypeOptionSelected: {
+    backgroundColor: '#E7F5FF',
+    borderColor: colors.primary,
+  },
+  planTypeText: {
+    color: colors.text,
+    fontSize: typography.small,
+    fontWeight: '800',
+  },
+  planTypeTextSelected: {
     color: colors.primaryDark,
   },
   rateRow: {

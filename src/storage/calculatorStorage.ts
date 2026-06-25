@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { LoanCalculationResult } from '../domain/loan/types';
+import type { LoanCalculationResult, LoanPlanType } from '../domain/loan/types';
 import { formatDateForFileName, startOfLocalDay } from '../utils/dateMath';
 
 const RECENT_CALCULATIONS_KEY = 'bankaci.recentCalculations.v1';
@@ -15,6 +15,8 @@ export type LoanFormSnapshot = {
   term: string;
   creditUsageDate: Date;
   firstInstallmentDate: Date;
+  planType?: LoanPlanType;
+  prepaidInterestAmount?: string;
 };
 
 export type PdfContactPreferences = {
@@ -33,6 +35,9 @@ export type RecentCalculation = {
     standardInstallment: number;
     firstInstallment: number;
     totalPayment: number;
+    planType?: LoanPlanType;
+    prepaidInterestInput?: number;
+    realizedPrepaidInterest?: number;
   };
 };
 
@@ -103,6 +108,8 @@ const deserializeForm = (
     term: String(form.term ?? ''),
     creditUsageDate,
     firstInstallmentDate,
+    planType: form.planType === 'prepaidInterest' ? 'prepaidInterest' : 'standard',
+    prepaidInterestAmount: String(form.prepaidInterestAmount ?? ''),
   };
 };
 
@@ -125,6 +132,11 @@ const deserializeRecentCalculation = (
       standardInstallment: Number(item.summary.standardInstallment) || 0,
       firstInstallment: Number(item.summary.firstInstallment) || 0,
       totalPayment: Number(item.summary.totalPayment) || 0,
+      planType:
+        item.summary.planType === 'prepaidInterest' ? 'prepaidInterest' : 'standard',
+      prepaidInterestInput: Number(item.summary.prepaidInterestInput) || 0,
+      realizedPrepaidInterest:
+        Number(item.summary.realizedPrepaidInterest) || 0,
     },
   };
 };
@@ -157,6 +169,9 @@ const isSameFormSnapshot = (
   a.bsmv === b.bsmv &&
   a.kkdf === b.kkdf &&
   a.term === b.term &&
+  (a.planType ?? 'standard') === (b.planType ?? 'standard') &&
+  String(a.prepaidInterestAmount ?? '') ===
+    String(b.prepaidInterestAmount ?? '') &&
   formatDateForFileName(a.creditUsageDate) ===
     formatDateForFileName(b.creditUsageDate) &&
   formatDateForFileName(a.firstInstallmentDate) ===
@@ -173,6 +188,9 @@ export const addRecentCalculation = async (
     standardInstallment: result.standardInstallment,
     firstInstallment: result.firstInstallment,
     totalPayment: result.totalPayment,
+    planType: result.planType,
+    prepaidInterestInput: result.prepaidInterestInput,
+    realizedPrepaidInterest: result.realizedPrepaidInterest,
   };
   const now = new Date().toISOString();
 

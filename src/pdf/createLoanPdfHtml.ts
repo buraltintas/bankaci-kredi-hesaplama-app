@@ -16,11 +16,27 @@ const escapeHtml = (value: string): string => {
     .replace(/'/g, '&#039;');
 };
 
+const getPlanTypeLabel = (result: LoanCalculationResult): string =>
+  result.planType === 'prepaidInterest'
+    ? 'Peşin Faiz Ödemeli'
+    : 'Standart Sabit Taksitli';
+
+const formatPercent = (
+  value: number,
+  maximumFractionDigits = 4,
+  minimumFractionDigits = 0
+): string =>
+  `%${value.toLocaleString('tr-TR', {
+    maximumFractionDigits,
+    minimumFractionDigits,
+  })}`;
+
 export const createLoanPdfHtml = (
   result: LoanCalculationResult,
   contactInfo?: LoanPdfContactInfo
 ): string => {
   const hasBrokenPeriod = result.brokenPeriod.diffDays !== 0;
+  const isPrepaidInterest = result.planType === 'prepaidInterest';
   const hasContactInfo =
     Boolean(contactInfo?.fullName.trim()) && Boolean(contactInfo?.phone.trim());
   const rows = result.schedule
@@ -68,9 +84,20 @@ export const createLoanPdfHtml = (
         <div class="box"><div class="label">İlk taksit tarihi</div><div class="value">${formatDate(result.input.firstInstallmentDate)}</div></div>
         <div class="box"><div class="label">Kredi tutarı</div><div class="value">${formatCurrency(result.input.principal)}</div></div>
         <div class="box"><div class="label">Vade</div><div class="value">${result.input.term} ay</div></div>
-        <div class="box"><div class="label">Aylık faiz oranı</div><div class="value">%${result.input.monthlyInterestRatePercent}</div></div>
+        <div class="box"><div class="label">Ödeme Planı Tipi</div><div class="value">${getPlanTypeLabel(result)}</div></div>
+        <div class="box"><div class="label">${isPrepaidInterest ? 'Baz aylık faiz oranı' : 'Aylık faiz oranı'}</div><div class="value">${formatPercent(result.input.monthlyInterestRatePercent)}</div></div>
         <div class="box"><div class="label">KKDF / BSMV</div><div class="value">%${result.input.kkdfRatePercent} / %${result.input.bsmvRatePercent}</div></div>
-        <div class="box"><div class="label">Standart aylık taksit</div><div class="value">${formatCurrency(result.standardInstallment)}</div></div>
+        ${
+          isPrepaidInterest
+            ? `<div class="box"><div class="label">İndirimli faiz oranı</div><div class="value">${formatPercent(
+                (result.discountedMonthlyRate ?? 0) * 100,
+                3,
+                3
+              )}</div></div>
+              <div class="box"><div class="label">0. taksit peşin faiz</div><div class="value">${formatCurrency(result.realizedPrepaidInterest ?? 0)}</div></div>`
+            : ''
+        }
+        <div class="box"><div class="label">${isPrepaidInterest ? 'Aylık taksit' : 'Standart aylık taksit'}</div><div class="value">${formatCurrency(result.standardInstallment)}</div></div>
         <div class="box"><div class="label">İlk taksit tutarı</div><div class="value">${formatCurrency(result.firstInstallment)}</div></div>
         <div class="box"><div class="label">Toplam ödeme</div><div class="value">${formatCurrency(result.totalPayment)}</div></div>
         <div class="box"><div class="label">Toplam faiz / KKDF / BSMV</div><div class="value">${formatCurrency(result.totalInterest)} / ${formatCurrency(result.totalKkdf)} / ${formatCurrency(result.totalBsmv)}</div></div>

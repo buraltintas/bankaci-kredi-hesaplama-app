@@ -6,6 +6,17 @@ import { colors, radius, shadows, spacing, typography } from '../src/design/toke
 import { formatCurrency } from '../src/utils/formatCurrency';
 import { formatDate } from '../src/utils/dateMath';
 
+const PLAN_TYPE_LABELS = {
+  standard: 'Standart Sabit Taksitli',
+  prepaidInterest: 'Peşin Faiz Ödemeli',
+};
+
+const formatPercent = (value, fractionDigits = 4, minimumFractionDigits = 0) =>
+  `%${value.toLocaleString('tr-TR', {
+    maximumFractionDigits: fractionDigits,
+    minimumFractionDigits,
+  })}`;
+
 const SummaryMetric = ({ label, value, highlighted }) => (
   <View style={[styles.metric, highlighted && styles.highlightMetric]}>
     <Text style={[styles.metricLabel, highlighted && styles.highlightLabel]}>
@@ -20,7 +31,11 @@ const SummaryMetric = ({ label, value, highlighted }) => (
 const ScheduleRow = ({ item }) => (
   <View style={styles.scheduleRow}>
     <View style={styles.scheduleHeader}>
-      <Text style={styles.scheduleNumber}>{item.installmentNumber}. Taksit</Text>
+      <Text style={styles.scheduleNumber}>
+        {item.isPrepaidInterest
+          ? '0. Taksit Peşin Faiz'
+          : `${item.installmentNumber}. Taksit`}
+      </Text>
       <Text style={styles.scheduleDate}>{formatDate(item.date)}</Text>
     </View>
     <View style={styles.scheduleGrid}>
@@ -41,6 +56,7 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
     [isScheduleOpen, result.schedule]
   );
   const hasBrokenPeriod = result.brokenPeriod.diffDays !== 0;
+  const isPrepaidInterest = result.planType === 'prepaidInterest';
 
   return (
     <>
@@ -63,12 +79,32 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
               highlighted
             />
             <SummaryMetric label="Vade" value={`${result.input.term} ay`} />
+            {isPrepaidInterest ? (
+              <SummaryMetric
+                label="Plan Tipi"
+                value={PLAN_TYPE_LABELS.prepaidInterest}
+              />
+            ) : null}
             <SummaryMetric
-              label="Aylık Faiz Oranı"
-              value={`%${result.input.monthlyInterestRatePercent.toLocaleString('tr-TR', {
-                maximumFractionDigits: 4,
-              })}`}
+              label={isPrepaidInterest ? 'Baz Aylık Faiz Oranı' : 'Aylık Faiz Oranı'}
+              value={formatPercent(result.input.monthlyInterestRatePercent)}
             />
+            {isPrepaidInterest ? (
+              <>
+                <SummaryMetric
+                  label="İndirimli Faiz Oranı"
+                  value={formatPercent(
+                    (result.discountedMonthlyRate ?? 0) * 100,
+                    3,
+                    3
+                  )}
+                />
+                <SummaryMetric
+                  label="0. Taksit Peşin Faiz"
+                  value={formatCurrency(result.realizedPrepaidInterest ?? 0)}
+                />
+              </>
+            ) : null}
             <SummaryMetric label="Toplam Faiz" value={formatCurrency(result.totalInterest)} />
             <SummaryMetric label="Toplam BSMV" value={formatCurrency(result.totalBsmv)} />
             <SummaryMetric label="Toplam KKDF" value={formatCurrency(result.totalKkdf)} />
@@ -133,7 +169,9 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
           <View>
             <Text style={styles.sectionTitle}>Ödeme Planı</Text>
             <Text style={styles.scheduleHint}>
-              {result.schedule.length} taksit detaylı amortisman tablosu
+              {isPrepaidInterest
+                ? `${result.input.term} taksit + 0. taksit peşin faiz`
+                : `${result.schedule.length} taksit detaylı amortisman tablosu`}
             </Text>
           </View>
           <Feather
@@ -144,7 +182,7 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
         </TouchableOpacity>
 
         {previewSchedule.map((item) => (
-          <ScheduleRow key={item.installmentNumber} item={item} />
+          <ScheduleRow key={`${item.installmentNumber}-${item.date.toISOString()}`} item={item} />
         ))}
       </View>
     </>

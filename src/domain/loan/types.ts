@@ -1,3 +1,5 @@
+export type LoanPlanType = 'standard' | 'prepaidInterest';
+
 export type LoanInput = {
   principal: number;
   term: number;
@@ -6,6 +8,8 @@ export type LoanInput = {
   bsmvRatePercent: number;
   creditUsageDate: Date;
   firstInstallmentDate: Date;
+  planType?: LoanPlanType;
+  prepaidInterestAmount?: number;
 };
 
 export type PaymentScheduleItem = {
@@ -17,6 +21,7 @@ export type PaymentScheduleItem = {
   kkdf: number;
   bsmv: number;
   remainingPrincipal: number;
+  isPrepaidInterest?: boolean;
 };
 
 export type BrokenPeriodInfo = {
@@ -31,6 +36,7 @@ export type BrokenPeriodInfo = {
 
 export type LoanCalculationResult = {
   input: LoanInput;
+  planType: LoanPlanType;
   standardInstallment: number;
   firstInstallment: number;
   totalPayment: number;
@@ -40,4 +46,9 @@ export type LoanCalculationResult = {
   totalBsmv: number;
   schedule: PaymentScheduleItem[];
   brokenPeriod: BrokenPeriodInfo;
+  discountedMonthlyRate?: number;
+  prepaidInterestInput?: number;
+  realizedPrepaidInterest?: number;
+  infoMessages?: string[];
+  warnings?: string[];
 };

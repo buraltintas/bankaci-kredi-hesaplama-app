@@ -1,4 +1,4 @@
-import MobileAds, { InterstitialAd, AdEventType } from 'react-native-google-mobile-ads';
+import Constants from 'expo-constants';
 import {
   ADS_ENABLED,
   INTERSTITIAL_SHOW_TIMEOUT_MS,
@@ -6,7 +6,32 @@ import {
   type InterstitialActionName,
 } from './adConfig';
 
-let currentAd: InterstitialAd | null = null;
+type InterstitialAdInstance = {
+  addAdEventListener: (
+    event: string,
+    callback: (payload?: unknown) => void
+  ) => () => void;
+  load: () => void;
+  show: () => Promise<void> | void;
+};
+
+type GoogleMobileAdsModule = {
+  default: () => { initialize: () => Promise<void> };
+  AdEventType: {
+    CLOSED: string;
+    ERROR: string;
+    LOADED: string;
+  };
+  InterstitialAd: {
+    createForAdRequest: (
+      adUnitId: string,
+      requestOptions: { requestNonPersonalizedAdsOnly: boolean }
+    ) => InterstitialAdInstance;
+  };
+};
+
+let currentAd: InterstitialAdInstance | null = null;
+let adsModule: GoogleMobileAdsModule | null | undefined;
 let adLoaded = false;
 let adLoading = false;
 let actionInProgress = false;
@@ -18,10 +43,32 @@ const logInterstitialDebug = (message: string): void => {
   }
 };
 
+const loadGoogleMobileAds = (): GoogleMobileAdsModule | null => {
+  if (Constants.appOwnership === 'expo') {
+    return null;
+  }
+
+  if (adsModule !== undefined) {
+    return adsModule;
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    adsModule = require('react-native-google-mobile-ads') as GoogleMobileAdsModule;
+  } catch {
+    adsModule = null;
+  }
+
+  return adsModule;
+};
+
 export const initializeInterstitialAds = async (): Promise<void> => {
   if (!ADS_ENABLED) return;
+  const mobileAds = loadGoogleMobileAds();
+  if (!mobileAds) return;
+
   try {
-    await MobileAds().initialize();
+    await mobileAds.default().initialize();
   } catch {
     // SDK initialization failed — ads won't show but app continues normally
   }
@@ -30,6 +77,8 @@ export const initializeInterstitialAds = async (): Promise<void> => {
 
 export const preloadInterstitialAd = (): void => {
   if (!ADS_ENABLED) return;
+  const mobileAds = loadGoogleMobileAds();
+  if (!mobileAds) return;
 
   const adUnitId = getInterstitialAdUnitId();
   if (!adUnitId) return;
@@ -48,7 +97,7 @@ export const preloadInterstitialAd = (): void => {
     logInterstitialDebug('Ad preload requested');
     adLoaded = false;
     adLoading = true;
-    currentAd = InterstitialAd.createForAdRequest(adUnitId, {
+    currentAd = mobileAds.InterstitialAd.createForAdRequest(adUnitId, {
       requestNonPersonalizedAdsOnly: false,
     });
     const ad = currentAd;
@@ -61,7 +110,7 @@ export const preloadInterstitialAd = (): void => {
       unsubError = undefined;
     };
 
-    unsubLoaded = ad.addAdEventListener(AdEventType.LOADED, () => {
+    unsubLoaded = ad.addAdEventListener(mobileAds.AdEventType.LOADED, () => {
       if (currentAd !== ad) return;
       adLoaded = true;
       adLoading = false;
@@ -69,7 +118,7 @@ export const preloadInterstitialAd = (): void => {
       cleanupLoadListeners();
     });
 
-    unsubError = ad.addAdEventListener(AdEventType.ERROR, () => {
+    unsubError = ad.addAdEventListener(mobileAds.AdEventType.ERROR, () => {
       if (currentAd !== ad) return;
       adLoaded = false;
       adLoading = false;
@@ -94,8 +143,9 @@ export const runActionWithOptionalInterstitial = async (
   actionInProgress = true;
 
   try {
+    const mobileAds = loadGoogleMobileAds();
     logInterstitialDebug(`${actionName === 'pdf' ? 'PDF' : 'Share'} pressed`);
-    const canShowAd = ADS_ENABLED && adLoaded && currentAd !== null;
+    const canShowAd = ADS_ENABLED && mobileAds && adLoaded && currentAd !== null;
 
     if (canShowAd) {
       const ad = currentAd!;
@@ -118,14 +168,14 @@ export const runActionWithOptionalInterstitial = async (
 
           const timer = setTimeout(settle, INTERSTITIAL_SHOW_TIMEOUT_MS);
 
-          unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
+          unsubClosed = ad.addAdEventListener(mobileAds.AdEventType.CLOSED, () => {
             unsubClosed?.();
             unsubError?.();
             logInterstitialDebug('Ad dismissed');
             settle();
           });
 
-          unsubError = ad.addAdEventListener(AdEventType.ERROR, () => {
+          unsubError = ad.addAdEventListener(mobileAds.AdEventType.ERROR, () => {
             unsubClosed?.();
             unsubError?.();
             logInterstitialDebug('Ad show failed');
@@ -162,6 +212,7 @@ export const runActionWithOptionalInterstitial = async (
 
 export const __resetInterstitialServiceForTests = (): void => {
   currentAd = null;
+  adsModule = undefined;
   adLoaded = false;
   adLoading = false;
   actionInProgress = false;
