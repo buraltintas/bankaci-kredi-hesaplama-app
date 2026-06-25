@@ -17,6 +17,10 @@ export type LoanFormSnapshot = {
   firstInstallmentDate: Date;
   planType?: LoanPlanType;
   prepaidInterestAmount?: string;
+  customPayments?: Array<{
+    installmentNo: string;
+    amount: string;
+  }>;
 };
 
 export type PdfContactPreferences = {
@@ -41,6 +45,8 @@ export type RecentCalculation = {
     monthlyPrincipalAmount?: number;
     firstInstallmentAmount?: number;
     lastInstallmentAmount?: number;
+    automaticInstallmentAmount?: number;
+    customPaymentCount?: number;
   };
 };
 
@@ -113,15 +119,33 @@ const deserializeForm = (
     firstInstallmentDate,
     planType: normalizePlanType(form.planType),
     prepaidInterestAmount: String(form.prepaidInterestAmount ?? ''),
+    customPayments: deserializeCustomPayments(form.customPayments),
   };
 };
 
 const normalizePlanType = (planType: unknown): LoanPlanType => {
-  if (planType === 'prepaidInterest' || planType === 'equalPrincipal') {
+  if (
+    planType === 'prepaidInterest' ||
+    planType === 'equalPrincipal' ||
+    planType === 'customPayment'
+  ) {
     return planType;
   }
 
   return 'standard';
+};
+
+const deserializeCustomPayments = (
+  value: unknown
+): LoanFormSnapshot['customPayments'] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((payment) => ({
+    installmentNo: String(payment?.installmentNo ?? ''),
+    amount: String(payment?.amount ?? ''),
+  }));
 };
 
 const deserializeRecentCalculation = (
@@ -153,6 +177,9 @@ const deserializeRecentCalculation = (
         Number(item.summary.firstInstallmentAmount) || 0,
       lastInstallmentAmount:
         Number(item.summary.lastInstallmentAmount) || 0,
+      automaticInstallmentAmount:
+        Number(item.summary.automaticInstallmentAmount) || 0,
+      customPaymentCount: Number(item.summary.customPaymentCount) || 0,
     },
   };
 };
@@ -188,6 +215,8 @@ const isSameFormSnapshot = (
   (a.planType ?? 'standard') === (b.planType ?? 'standard') &&
   String(a.prepaidInterestAmount ?? '') ===
     String(b.prepaidInterestAmount ?? '') &&
+  JSON.stringify(a.customPayments ?? []) ===
+    JSON.stringify(b.customPayments ?? []) &&
   formatDateForFileName(a.creditUsageDate) ===
     formatDateForFileName(b.creditUsageDate) &&
   formatDateForFileName(a.firstInstallmentDate) ===
@@ -210,6 +239,8 @@ export const addRecentCalculation = async (
     monthlyPrincipalAmount: result.monthlyPrincipalAmount,
     firstInstallmentAmount: result.firstInstallmentAmount,
     lastInstallmentAmount: result.lastInstallmentAmount,
+    automaticInstallmentAmount: result.automaticInstallmentAmount,
+    customPaymentCount: result.input.customPayments?.length,
   };
   const now = new Date().toISOString();
 

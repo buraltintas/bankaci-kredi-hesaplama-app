@@ -21,6 +21,10 @@ import LoanResult from './LoanResult';
 import NumericInput from '../src/components/NumericInput';
 import { colors, radius, shadows, spacing, typography } from '../src/design/tokens';
 import { calculateLoan } from '../src/domain/loan/calculateLoan';
+import {
+  buildCustomPaymentsFromRows,
+} from '../src/domain/loan/customPaymentForm';
+import { buildLoanShareMessage } from '../src/domain/loan/shareSummary';
 import { exportLoanPdf } from '../src/pdf/exportLoanPdf';
 import { useInterstitialAction } from '../src/ads/useInterstitialAction';
 import {
@@ -41,7 +45,14 @@ const PLAN_TYPE_LABELS = {
   standard: 'Standart Sabit Taksitli',
   prepaidInterest: 'Peşin Faiz Ödemeli',
   equalPrincipal: 'Eşit Anapara Ödemeli',
+  customPayment: 'Özel / Balon Ödeme Planı',
 };
+
+const createCustomPaymentRow = () => ({
+  id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+  installmentNo: '',
+  amount: '',
+});
 
 const LoanCalculator = () => {
   const insets = useSafeAreaInsets();
@@ -57,6 +68,9 @@ const LoanCalculator = () => {
   const [term, setTerm] = useState('');
   const [planType, setPlanType] = useState('standard');
   const [prepaidInterestAmount, setPrepaidInterestAmount] = useState('');
+  const [customPaymentRows, setCustomPaymentRows] = useState([
+    createCustomPaymentRow(),
+  ]);
   const [creditUsageDate, setCreditUsageDate] = useState(today);
   const [firstInstallmentDate, setFirstInstallmentDate] = useState(addMonths(today, 1));
   const [activeDatePicker, setActiveDatePicker] = useState(null);
@@ -161,6 +175,10 @@ const LoanCalculator = () => {
     term,
     planType,
     prepaidInterestAmount,
+    customPayments: customPaymentRows.map(({ installmentNo, amount }) => ({
+      installmentNo,
+      amount,
+    })),
     creditUsageDate,
     firstInstallmentDate,
   });
@@ -174,6 +192,15 @@ const LoanCalculator = () => {
     setTerm(formSnapshot.term);
     setPlanType(formSnapshot.planType ?? 'standard');
     setPrepaidInterestAmount(formSnapshot.prepaidInterestAmount ?? '');
+    setCustomPaymentRows(
+      formSnapshot.customPayments?.length
+        ? formSnapshot.customPayments.map((payment) => ({
+            id: createCustomPaymentRow().id,
+            installmentNo: payment.installmentNo,
+            amount: payment.amount,
+          }))
+        : [createCustomPaymentRow()]
+    );
     setCreditUsageDate(formSnapshot.creditUsageDate);
     setFirstInstallmentDate(formSnapshot.firstInstallmentDate);
     setActiveDatePicker(null);
@@ -250,6 +277,16 @@ const LoanCalculator = () => {
         throw new Error('Peşin faiz tutarı kredi tutarından küçük olmalıdır.');
       }
     }
+    const customPayments =
+      planType === 'customPayment'
+        ? buildCustomPaymentsFromRows(
+            customPaymentRows.map(({ installmentNo, amount }) => ({
+              installmentNo,
+              amount,
+            })),
+            termCount.value
+          )
+        : undefined;
 
     return {
       principal: principal.value,
@@ -262,6 +299,7 @@ const LoanCalculator = () => {
       planType,
       prepaidInterestAmount:
         planType === 'prepaidInterest' ? prepaidInterest.value : undefined,
+      customPayments,
     };
   };
 
@@ -271,6 +309,14 @@ const LoanCalculator = () => {
       recentCalculation.form.prepaidInterestAmount ?? '',
       'money'
     );
+
+    const customPayments =
+      recentPlanType === 'customPayment'
+        ? buildCustomPaymentsFromRows(
+            recentCalculation.form.customPayments ?? [],
+            recentCalculation.summary.term
+          )
+        : undefined;
 
     return {
       principal: recentCalculation.summary.principal,
@@ -287,7 +333,27 @@ const LoanCalculator = () => {
         recentPlanType === 'prepaidInterest' && prepaidInterest.isValid
           ? prepaidInterest.value
           : undefined,
+      customPayments,
     };
+  };
+
+  const handleCustomPaymentRowChange = (id, field, value) => {
+    setCustomPaymentRows((rows) =>
+      rows.map((row) => (row.id === id ? { ...row, [field]: value } : row))
+    );
+    clearResult();
+  };
+
+  const handleAddCustomPaymentRow = () => {
+    setCustomPaymentRows((rows) => [...rows, createCustomPaymentRow()]);
+    clearResult();
+  };
+
+  const handleRemoveCustomPaymentRow = (id) => {
+    setCustomPaymentRows((rows) =>
+      rows.length > 1 ? rows.filter((row) => row.id !== id) : rows
+    );
+    clearResult();
   };
 
   const handleCreditUsageDateChange = (selectedDate) => {
@@ -426,45 +492,10 @@ const LoanCalculator = () => {
     await runActionWithOptionalInterstitial('share', async () => {
       try {
         const uri = await resultRef.current?.capture?.();
-        const brokenPeriodNote =
-          result.brokenPeriod.diffDays !== 0
-            ? '\nİlk taksit tarihine bağlı kırık dönem farkı sadece 1. taksite yansıtılmıştır.'
-            : '';
-        const prepaidInterestNote =
-          result.planType === 'prepaidInterest'
-            ? `\nÖdeme planı tipi: ${PLAN_TYPE_LABELS.prepaidInterest}
-İndirimli faiz oranı: %${(result.discountedMonthlyRate * 100).toLocaleString('tr-TR', {
-                maximumFractionDigits: 3,
-                minimumFractionDigits: 3,
-              })}
-0. taksit peşin faiz: ${formatCurrency(result.realizedPrepaidInterest ?? 0)}`
-            : '';
-        const equalPrincipalNote =
-          result.planType === 'equalPrincipal'
-            ? `\nÖdeme planı tipi: ${PLAN_TYPE_LABELS.equalPrincipal}`
-            : '';
-        const standardInstallmentLine =
-          result.planType === 'equalPrincipal'
-            ? `Aylık anapara: ${formatCurrency(result.monthlyPrincipalAmount ?? 0)}
-İlk taksit: ${formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)}
-Son taksit: ${formatCurrency(result.lastInstallmentAmount ?? 0)}`
-            : `İlk taksit: ${formatCurrency(result.firstInstallment)}
-Standart aylık taksit: ${formatCurrency(result.standardInstallment)}`;
 
         await Share.share({
           title: 'Kredi Hesaplama Sonucu',
-          message: `Kredi kullanım tarihi: ${formatDate(result.input.creditUsageDate)}
-İlk taksit tarihi: ${formatDate(result.input.firstInstallmentDate)}
-Kredi tutarı: ${formatCurrency(result.input.principal)}
-Vade: ${result.input.term} ay
-Faiz: %${result.input.monthlyInterestRatePercent}
-KKDF: %${result.input.kkdfRatePercent} | BSMV: %${result.input.bsmvRatePercent}
-${standardInstallmentLine}
-Toplam ödeme: ${formatCurrency(result.totalPayment)}${prepaidInterestNote}${equalPrincipalNote}${
-            result.planType === 'standard'
-              ? `\nÖdeme planı tipi: ${PLAN_TYPE_LABELS.standard}`
-              : ''
-          }${brokenPeriodNote}`,
+          message: buildLoanShareMessage(result),
           url: Platform.OS === 'ios' ? uri : uri ? `file://${uri}` : undefined,
         });
       } catch {
@@ -621,6 +652,9 @@ Toplam ödeme: ${formatCurrency(result.totalPayment)}${prepaidInterestNote}${equ
                     ]}
                     onPress={() => {
                       setPlanType(type);
+                      if (type === 'customPayment' && customPaymentRows.length === 0) {
+                        setCustomPaymentRows([createCustomPaymentRow()]);
+                      }
                       clearResult();
                     }}
                   >
@@ -648,6 +682,67 @@ Toplam ödeme: ${formatCurrency(result.totalPayment)}${prepaidInterestNote}${equ
                 }}
                 placeholder="Örn. 50.000"
               />
+            ) : null}
+
+            {planType === 'customPayment' ? (
+              <View style={styles.customPaymentGroup}>
+                <View style={styles.customPaymentHeader}>
+                  <Text style={styles.label}>Özel Ödemeler</Text>
+                  <TouchableOpacity
+                    style={styles.addCustomPaymentButton}
+                    onPress={handleAddCustomPaymentRow}
+                  >
+                    <Feather name="plus" size={17} color={colors.primary} />
+                    <Text style={styles.addCustomPaymentText}>Satır ekle</Text>
+                  </TouchableOpacity>
+                </View>
+                {customPaymentRows.map((row, index) => (
+                  <View key={row.id} style={styles.customPaymentRow}>
+                    <View style={styles.customPaymentInstallmentInput}>
+                      <NumericInput
+                        label="Taksit No"
+                        mode="integer"
+                        value={row.installmentNo}
+                        onChangeText={(value) =>
+                          handleCustomPaymentRowChange(row.id, 'installmentNo', value)
+                        }
+                        placeholder="Örn. 6"
+                      />
+                    </View>
+                    <View style={styles.customPaymentAmountInput}>
+                      <NumericInput
+                        label="Tutar"
+                        mode="money"
+                        value={row.amount}
+                        onChangeText={(value) =>
+                          handleCustomPaymentRowChange(row.id, 'amount', value)
+                        }
+                        placeholder="Örn. 50.000"
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        styles.removeCustomPaymentButton,
+                        customPaymentRows.length === 1 &&
+                          styles.removeCustomPaymentButtonDisabled,
+                      ]}
+                      onPress={() => handleRemoveCustomPaymentRow(row.id)}
+                      disabled={customPaymentRows.length === 1}
+                      accessibilityLabel={`${index + 1}. özel ödeme satırını sil`}
+                    >
+                      <Feather
+                        name="trash-2"
+                        size={18}
+                        color={
+                          customPaymentRows.length === 1
+                            ? colors.textMuted
+                            : colors.danger
+                        }
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
             ) : null}
           </View>
 
@@ -847,10 +942,17 @@ Toplam ödeme: ${formatCurrency(result.totalPayment)}${prepaidInterestNote}${equ
                           </TouchableOpacity>
                         </View>
                         <Text style={styles.recentItemText}>
-                          {recentCalculation.form.planType === 'equalPrincipal'
+                          {recentCalculation.form.planType === 'customPayment'
+                            ? 'Otomatik '
+                            : recentCalculation.form.planType === 'equalPrincipal'
                             ? 'İlk / Son '
                             : 'Aylık '}
-                          {recentCalculation.form.planType === 'equalPrincipal'
+                          {recentCalculation.form.planType === 'customPayment'
+                            ? formatCurrency(
+                                recentCalculation.summary
+                                  .automaticInstallmentAmount ?? 0
+                              )
+                            : recentCalculation.form.planType === 'equalPrincipal'
                             ? `${formatCurrency(
                                 recentCalculation.summary.firstInstallmentAmount ??
                                   recentCalculation.summary.firstInstallment
@@ -873,6 +975,10 @@ Toplam ödeme: ${formatCurrency(result.totalPayment)}${prepaidInterestNote}${equ
                                 recentCalculation.summary
                                   .realizedPrepaidInterest ?? 0
                               )}`
+                            : recentCalculation.form.planType === 'customPayment'
+                              ? ` · ${
+                                  recentCalculation.form.customPayments?.length ?? 0
+                                } özel`
                             : ''}
                         </Text>
                         <Text style={styles.recentItemText}>
@@ -1074,6 +1180,50 @@ const styles = StyleSheet.create({
   },
   planTypeTextSelected: {
     color: colors.primaryDark,
+  },
+  customPaymentGroup: {
+    gap: spacing.sm,
+  },
+  customPaymentHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  addCustomPaymentButton: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 36,
+    paddingHorizontal: spacing.sm,
+  },
+  addCustomPaymentText: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: '900',
+  },
+  customPaymentRow: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  customPaymentInstallmentInput: {
+    flex: 0.8,
+  },
+  customPaymentAmountInput: {
+    flex: 1.4,
+  },
+  removeCustomPaymentButton: {
+    alignItems: 'center',
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    height: 52,
+    justifyContent: 'center',
+    marginBottom: 0,
+    width: 44,
+  },
+  removeCustomPaymentButtonDisabled: {
+    opacity: 0.45,
   },
   rateRow: {
     flexDirection: 'row',

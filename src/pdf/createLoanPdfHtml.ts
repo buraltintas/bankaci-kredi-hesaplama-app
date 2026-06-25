@@ -1,6 +1,7 @@
 import { formatCurrency } from '../utils/formatCurrency';
 import { formatDate } from '../utils/dateMath';
 import type { LoanCalculationResult } from '../domain/loan/types';
+import { formatCustomPaymentsSummary } from '../domain/loan/customPaymentForm';
 
 export type LoanPdfContactInfo = {
   fullName: string;
@@ -21,6 +22,8 @@ const getPlanTypeLabel = (result: LoanCalculationResult): string =>
     ? 'Peşin Faiz Ödemeli'
     : result.planType === 'equalPrincipal'
       ? 'Eşit Anapara Ödemeli'
+      : result.planType === 'customPayment'
+        ? 'Özel / Balon Ödeme Planı'
       : 'Standart Sabit Taksitli';
 
 const formatPercent = (
@@ -40,6 +43,7 @@ export const createLoanPdfHtml = (
   const hasBrokenPeriod = result.brokenPeriod.diffDays !== 0;
   const isPrepaidInterest = result.planType === 'prepaidInterest';
   const isEqualPrincipal = result.planType === 'equalPrincipal';
+  const isCustomPayment = result.planType === 'customPayment';
   const hasContactInfo =
     Boolean(contactInfo?.fullName.trim()) && Boolean(contactInfo?.phone.trim());
   const rows = result.schedule
@@ -108,6 +112,16 @@ export const createLoanPdfHtml = (
               <div class="box"><div class="label">Son taksit tutarı</div><div class="value">${formatCurrency(
                 result.lastInstallmentAmount ?? 0
               )}</div></div>`
+            : isCustomPayment
+              ? `<div class="box"><div class="label">Otomatik taksit</div><div class="value">${formatCurrency(
+                  result.automaticInstallmentAmount ?? 0
+                )}</div></div>
+                <div class="box"><div class="label">Özel ödeme sayısı</div><div class="value">${
+                  result.input.customPayments?.length ?? 0
+                }</div></div>
+                <div class="box"><div class="label">Son taksit tutarı</div><div class="value">${formatCurrency(
+                  result.lastInstallmentAmount ?? 0
+                )}</div></div>`
             : `<div class="box"><div class="label">${isPrepaidInterest ? 'Aylık taksit' : 'Standart aylık taksit'}</div><div class="value">${formatCurrency(result.standardInstallment)}</div></div>`
         }
         <div class="box"><div class="label">İlk taksit tutarı</div><div class="value">${formatCurrency(result.firstInstallment)}</div></div>
@@ -122,6 +136,17 @@ export const createLoanPdfHtml = (
               Faiz farkı: ${formatCurrency(result.brokenPeriod.interestDiff)}<br />
               KKDF farkı: ${formatCurrency(result.brokenPeriod.kkdfDiff)}<br />
               BSMV farkı: ${formatCurrency(result.brokenPeriod.bsmvDiff)}
+            </section>`
+          : ''
+      }
+      ${
+        isCustomPayment && result.input.customPayments?.length
+          ? `<section class="broken">
+              <strong>Özel Ödemeler:</strong><br />
+              ${formatCustomPaymentsSummary(result.input.customPayments)
+                .split('\n')
+                .map(escapeHtml)
+                .join('<br />')}
             </section>`
           : ''
       }

@@ -285,6 +285,7 @@ const buildCustomPaymentScheduleWithAmount = (
       kkdf,
       bsmv,
       remainingPrincipal,
+      isCustomPayment,
     };
   });
 };

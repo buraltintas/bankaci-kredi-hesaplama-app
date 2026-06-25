@@ -30,6 +30,7 @@ export type PaymentScheduleItem = {
   bsmv: number;
   remainingPrincipal: number;
   isPrepaidInterest?: boolean;
+  isCustomPayment?: boolean;
 };
 
 export type BrokenPeriodInfo = {

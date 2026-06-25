@@ -5,11 +5,13 @@ import { Feather } from '@expo/vector-icons';
 import { colors, radius, shadows, spacing, typography } from '../src/design/tokens';
 import { formatCurrency } from '../src/utils/formatCurrency';
 import { formatDate } from '../src/utils/dateMath';
+import { formatCustomPaymentsSummary } from '../src/domain/loan/customPaymentForm';
 
 const PLAN_TYPE_LABELS = {
   standard: 'Standart Sabit Taksitli',
   prepaidInterest: 'Peşin Faiz Ödemeli',
   equalPrincipal: 'Eşit Anapara Ödemeli',
+  customPayment: 'Özel / Balon Ödeme Planı',
 };
 
 const formatPercent = (value, fractionDigits = 4, minimumFractionDigits = 0) =>
@@ -36,6 +38,7 @@ const ScheduleRow = ({ item }) => (
         {item.isPrepaidInterest
           ? '0. Taksit Peşin Faiz'
           : `${item.installmentNumber}. Taksit`}
+        {item.isCustomPayment ? ' · Özel' : ''}
       </Text>
       <Text style={styles.scheduleDate}>{formatDate(item.date)}</Text>
     </View>
@@ -59,13 +62,22 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
   const hasBrokenPeriod = result.brokenPeriod.diffDays !== 0;
   const isPrepaidInterest = result.planType === 'prepaidInterest';
   const isEqualPrincipal = result.planType === 'equalPrincipal';
-  const heroLabel = isEqualPrincipal ? 'İlk Taksit / Son Taksit' : 'Aylık Taksit';
-  const heroValue = isEqualPrincipal
+  const isCustomPayment = result.planType === 'customPayment';
+  const heroLabel = isCustomPayment
+    ? 'Otomatik Taksit'
+    : isEqualPrincipal
+      ? 'İlk Taksit / Son Taksit'
+      : 'Aylık Taksit';
+  const heroValue = isCustomPayment
+    ? formatCurrency(result.automaticInstallmentAmount ?? 0)
+    : isEqualPrincipal
     ? `${formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)} / ${formatCurrency(
         result.lastInstallmentAmount ?? result.firstInstallment
       )}`
     : formatCurrency(result.standardInstallment);
-  const heroSubValue = isEqualPrincipal
+  const heroSubValue = isCustomPayment
+    ? `${result.input.customPayments?.length ?? 0} özel ödeme`
+    : isEqualPrincipal
     ? `Aylık anapara ${formatCurrency(result.monthlyPrincipalAmount ?? 0)}`
     : `İlk taksit ${formatCurrency(result.firstInstallment)}`;
 
@@ -128,6 +140,26 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
                 />
               </>
             ) : null}
+            {isCustomPayment ? (
+              <>
+                <SummaryMetric
+                  label="Otomatik Taksit"
+                  value={formatCurrency(result.automaticInstallmentAmount ?? 0)}
+                />
+                <SummaryMetric
+                  label="Özel Ödeme Sayısı"
+                  value={`${result.input.customPayments?.length ?? 0}`}
+                />
+                <SummaryMetric
+                  label="İlk Taksit"
+                  value={formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)}
+                />
+                <SummaryMetric
+                  label="Son Taksit"
+                  value={formatCurrency(result.lastInstallmentAmount ?? 0)}
+                />
+              </>
+            ) : null}
             <SummaryMetric label="Toplam Faiz" value={formatCurrency(result.totalInterest)} />
             <SummaryMetric label="Toplam BSMV" value={formatCurrency(result.totalBsmv)} />
             <SummaryMetric label="Toplam KKDF" value={formatCurrency(result.totalKkdf)} />
@@ -162,6 +194,15 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
               </View>
             </View>
           ) : null}
+
+          {isCustomPayment && result.input.customPayments?.length ? (
+            <View style={styles.customPaymentSummary}>
+              <Text style={styles.customPaymentTitle}>Özel Ödemeler</Text>
+              <Text style={styles.customPaymentText}>
+                {formatCustomPaymentsSummary(result.input.customPayments)}
+              </Text>
+            </View>
+          ) : null}
         </View>
       </ViewShot>
 
@@ -194,6 +235,10 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
             <Text style={styles.scheduleHint}>
               {isPrepaidInterest
                 ? `${result.input.term} taksit + 0. taksit peşin faiz`
+                : isCustomPayment
+                  ? `${result.schedule.length} taksit · ${
+                      result.input.customPayments?.length ?? 0
+                    } özel ödeme`
                 : isEqualPrincipal
                   ? `${result.schedule.length} azalan taksit detaylı ödeme planı`
                 : `${result.schedule.length} taksit detaylı amortisman tablosu`}
@@ -315,6 +360,23 @@ const styles = StyleSheet.create({
   brokenText: {
     color: colors.text,
     fontSize: typography.small,
+    lineHeight: 18,
+  },
+  customPaymentSummary: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.md,
+    gap: spacing.xs,
+    padding: spacing.md,
+  },
+  customPaymentTitle: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: '900',
+  },
+  customPaymentText: {
+    color: colors.text,
+    fontSize: typography.small,
+    fontWeight: '700',
     lineHeight: 18,
   },
   actions: {

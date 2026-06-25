@@ -113,4 +113,30 @@ describe('createLoanPdfHtml', () => {
     expect(html).toContain(formatCurrency(result.lastInstallmentAmount ?? 0));
     expect(html).toContain(formatCurrency(result.totalPayment));
   });
+
+  it('renders custom payment plan details and individual custom payments', () => {
+    const result = calculateLoan({
+      principal: 120000,
+      term: 12,
+      monthlyInterestRatePercent: 3,
+      kkdfRatePercent: 0,
+      bsmvRatePercent: 0,
+      creditUsageDate: new Date(2026, 5, 24),
+      firstInstallmentDate: new Date(2026, 6, 24),
+      planType: 'customPayment',
+      customPayments: [
+        { installmentNo: 1, amount: 10000 },
+        { installmentNo: 10, amount: 50000 },
+      ],
+    });
+    const html = createLoanPdfHtml(result);
+
+    expect(html).toContain('Özel / Balon Ödeme Planı');
+    expect(html).toContain('Otomatik taksit');
+    expect(html).toContain(formatCurrency(result.automaticInstallmentAmount ?? 0));
+    expect(html).toContain('Özel ödeme sayısı');
+    expect(html).toContain('Özel Ödemeler:');
+    expect(html).toContain('1. taksit: 10.000,00 TL');
+    expect(html).toContain('10. taksit: 50.000,00 TL');
+  });
 });
