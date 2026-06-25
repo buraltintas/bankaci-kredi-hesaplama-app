@@ -40,6 +40,7 @@ const ACTION_BAR_VERTICAL_PADDING = spacing.lg;
 const PLAN_TYPE_LABELS = {
   standard: 'Standart Sabit Taksitli',
   prepaidInterest: 'Peşin Faiz Ödemeli',
+  equalPrincipal: 'Eşit Anapara Ödemeli',
 };
 
 const LoanCalculator = () => {
@@ -437,7 +438,18 @@ const LoanCalculator = () => {
                 minimumFractionDigits: 3,
               })}
 0. taksit peşin faiz: ${formatCurrency(result.realizedPrepaidInterest ?? 0)}`
-            : `\nÖdeme planı tipi: ${PLAN_TYPE_LABELS.standard}`;
+            : '';
+        const equalPrincipalNote =
+          result.planType === 'equalPrincipal'
+            ? `\nÖdeme planı tipi: ${PLAN_TYPE_LABELS.equalPrincipal}`
+            : '';
+        const standardInstallmentLine =
+          result.planType === 'equalPrincipal'
+            ? `Aylık anapara: ${formatCurrency(result.monthlyPrincipalAmount ?? 0)}
+İlk taksit: ${formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)}
+Son taksit: ${formatCurrency(result.lastInstallmentAmount ?? 0)}`
+            : `İlk taksit: ${formatCurrency(result.firstInstallment)}
+Standart aylık taksit: ${formatCurrency(result.standardInstallment)}`;
 
         await Share.share({
           title: 'Kredi Hesaplama Sonucu',
@@ -447,9 +459,12 @@ Kredi tutarı: ${formatCurrency(result.input.principal)}
 Vade: ${result.input.term} ay
 Faiz: %${result.input.monthlyInterestRatePercent}
 KKDF: %${result.input.kkdfRatePercent} | BSMV: %${result.input.bsmvRatePercent}
-İlk taksit: ${formatCurrency(result.firstInstallment)}
-Standart aylık taksit: ${formatCurrency(result.standardInstallment)}
-Toplam ödeme: ${formatCurrency(result.totalPayment)}${prepaidInterestNote}${brokenPeriodNote}`,
+${standardInstallmentLine}
+Toplam ödeme: ${formatCurrency(result.totalPayment)}${prepaidInterestNote}${equalPrincipalNote}${
+            result.planType === 'standard'
+              ? `\nÖdeme planı tipi: ${PLAN_TYPE_LABELS.standard}`
+              : ''
+          }${brokenPeriodNote}`,
           url: Platform.OS === 'ios' ? uri : uri ? `file://${uri}` : undefined,
         });
       } catch {
@@ -832,10 +847,20 @@ Toplam ödeme: ${formatCurrency(result.totalPayment)}${prepaidInterestNote}${bro
                           </TouchableOpacity>
                         </View>
                         <Text style={styles.recentItemText}>
-                          Aylık{' '}
-                          {formatCurrency(
-                            recentCalculation.summary.standardInstallment
-                          )}
+                          {recentCalculation.form.planType === 'equalPrincipal'
+                            ? 'İlk / Son '
+                            : 'Aylık '}
+                          {recentCalculation.form.planType === 'equalPrincipal'
+                            ? `${formatCurrency(
+                                recentCalculation.summary.firstInstallmentAmount ??
+                                  recentCalculation.summary.firstInstallment
+                              )} / ${formatCurrency(
+                                recentCalculation.summary.lastInstallmentAmount ??
+                                  recentCalculation.summary.firstInstallment
+                              )}`
+                            : formatCurrency(
+                                recentCalculation.summary.standardInstallment
+                              )}
                           {' · '}%
                           {recentCalculation.form.interestRate} faiz
                         </Text>

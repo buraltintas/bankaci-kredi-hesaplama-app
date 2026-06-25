@@ -9,6 +9,7 @@ import { formatDate } from '../src/utils/dateMath';
 const PLAN_TYPE_LABELS = {
   standard: 'Standart Sabit Taksitli',
   prepaidInterest: 'Peşin Faiz Ödemeli',
+  equalPrincipal: 'Eşit Anapara Ödemeli',
 };
 
 const formatPercent = (value, fractionDigits = 4, minimumFractionDigits = 0) =>
@@ -57,19 +58,25 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
   );
   const hasBrokenPeriod = result.brokenPeriod.diffDays !== 0;
   const isPrepaidInterest = result.planType === 'prepaidInterest';
+  const isEqualPrincipal = result.planType === 'equalPrincipal';
+  const heroLabel = isEqualPrincipal ? 'İlk Taksit / Son Taksit' : 'Aylık Taksit';
+  const heroValue = isEqualPrincipal
+    ? `${formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)} / ${formatCurrency(
+        result.lastInstallmentAmount ?? result.firstInstallment
+      )}`
+    : formatCurrency(result.standardInstallment);
+  const heroSubValue = isEqualPrincipal
+    ? `Aylık anapara ${formatCurrency(result.monthlyPrincipalAmount ?? 0)}`
+    : `İlk taksit ${formatCurrency(result.firstInstallment)}`;
 
   return (
     <>
       <ViewShot ref={resultRef} options={{ format: 'jpg', quality: 0.9 }}>
         <View style={styles.resultContainer}>
           <View style={styles.heroResult}>
-            <Text style={styles.heroLabel}>Aylık Taksit</Text>
-            <Text style={styles.heroValue}>
-              {formatCurrency(result.standardInstallment)}
-            </Text>
-            <Text style={styles.heroSubValue}>
-              İlk taksit {formatCurrency(result.firstInstallment)}
-            </Text>
+            <Text style={styles.heroLabel}>{heroLabel}</Text>
+            <Text style={styles.heroValue}>{heroValue}</Text>
+            <Text style={styles.heroSubValue}>{heroSubValue}</Text>
           </View>
 
           <View style={styles.metricsGrid}>
@@ -79,10 +86,10 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
               highlighted
             />
             <SummaryMetric label="Vade" value={`${result.input.term} ay`} />
-            {isPrepaidInterest ? (
+            {result.planType !== 'standard' ? (
               <SummaryMetric
                 label="Plan Tipi"
-                value={PLAN_TYPE_LABELS.prepaidInterest}
+                value={PLAN_TYPE_LABELS[result.planType]}
               />
             ) : null}
             <SummaryMetric
@@ -102,6 +109,22 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
                 <SummaryMetric
                   label="0. Taksit Peşin Faiz"
                   value={formatCurrency(result.realizedPrepaidInterest ?? 0)}
+                />
+              </>
+            ) : null}
+            {isEqualPrincipal ? (
+              <>
+                <SummaryMetric
+                  label="Aylık Anapara"
+                  value={formatCurrency(result.monthlyPrincipalAmount ?? 0)}
+                />
+                <SummaryMetric
+                  label="İlk Taksit"
+                  value={formatCurrency(result.firstInstallmentAmount ?? 0)}
+                />
+                <SummaryMetric
+                  label="Son Taksit"
+                  value={formatCurrency(result.lastInstallmentAmount ?? 0)}
                 />
               </>
             ) : null}
@@ -171,6 +194,8 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
             <Text style={styles.scheduleHint}>
               {isPrepaidInterest
                 ? `${result.input.term} taksit + 0. taksit peşin faiz`
+                : isEqualPrincipal
+                  ? `${result.schedule.length} azalan taksit detaylı ödeme planı`
                 : `${result.schedule.length} taksit detaylı amortisman tablosu`}
             </Text>
           </View>

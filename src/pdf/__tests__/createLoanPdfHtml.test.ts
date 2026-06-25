@@ -91,4 +91,26 @@ describe('createLoanPdfHtml', () => {
     expect(html).toContain(formatCurrency(result.totalKkdf));
     expect(html).toContain(formatCurrency(result.totalBsmv));
   });
+
+  it('renders equal principal plan details', () => {
+    const result = calculateLoan({
+      principal: 120000,
+      term: 12,
+      monthlyInterestRatePercent: 3,
+      kkdfRatePercent: 15,
+      bsmvRatePercent: 15,
+      creditUsageDate: new Date(2026, 5, 24),
+      firstInstallmentDate: new Date(2026, 6, 24),
+      planType: 'equalPrincipal',
+    });
+    const html = createLoanPdfHtml(result);
+
+    expect(html).toContain('Ödeme Planı Tipi');
+    expect(html).toContain('Eşit Anapara Ödemeli');
+    expect(html).toContain('Aylık anapara');
+    expect(html).toContain(formatCurrency(result.monthlyPrincipalAmount ?? 0));
+    expect(html).toContain('Son taksit tutarı');
+    expect(html).toContain(formatCurrency(result.lastInstallmentAmount ?? 0));
+    expect(html).toContain(formatCurrency(result.totalPayment));
+  });
 });

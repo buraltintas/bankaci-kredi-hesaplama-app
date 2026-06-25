@@ -19,7 +19,9 @@ const escapeHtml = (value: string): string => {
 const getPlanTypeLabel = (result: LoanCalculationResult): string =>
   result.planType === 'prepaidInterest'
     ? 'Peşin Faiz Ödemeli'
-    : 'Standart Sabit Taksitli';
+    : result.planType === 'equalPrincipal'
+      ? 'Eşit Anapara Ödemeli'
+      : 'Standart Sabit Taksitli';
 
 const formatPercent = (
   value: number,
@@ -37,6 +39,7 @@ export const createLoanPdfHtml = (
 ): string => {
   const hasBrokenPeriod = result.brokenPeriod.diffDays !== 0;
   const isPrepaidInterest = result.planType === 'prepaidInterest';
+  const isEqualPrincipal = result.planType === 'equalPrincipal';
   const hasContactInfo =
     Boolean(contactInfo?.fullName.trim()) && Boolean(contactInfo?.phone.trim());
   const rows = result.schedule
@@ -97,7 +100,16 @@ export const createLoanPdfHtml = (
               <div class="box"><div class="label">0. taksit peşin faiz</div><div class="value">${formatCurrency(result.realizedPrepaidInterest ?? 0)}</div></div>`
             : ''
         }
-        <div class="box"><div class="label">${isPrepaidInterest ? 'Aylık taksit' : 'Standart aylık taksit'}</div><div class="value">${formatCurrency(result.standardInstallment)}</div></div>
+        ${
+          isEqualPrincipal
+            ? `<div class="box"><div class="label">Aylık anapara</div><div class="value">${formatCurrency(
+                result.monthlyPrincipalAmount ?? 0
+              )}</div></div>
+              <div class="box"><div class="label">Son taksit tutarı</div><div class="value">${formatCurrency(
+                result.lastInstallmentAmount ?? 0
+              )}</div></div>`
+            : `<div class="box"><div class="label">${isPrepaidInterest ? 'Aylık taksit' : 'Standart aylık taksit'}</div><div class="value">${formatCurrency(result.standardInstallment)}</div></div>`
+        }
         <div class="box"><div class="label">İlk taksit tutarı</div><div class="value">${formatCurrency(result.firstInstallment)}</div></div>
         <div class="box"><div class="label">Toplam ödeme</div><div class="value">${formatCurrency(result.totalPayment)}</div></div>
         <div class="box"><div class="label">Toplam faiz / KKDF / BSMV</div><div class="value">${formatCurrency(result.totalInterest)} / ${formatCurrency(result.totalKkdf)} / ${formatCurrency(result.totalBsmv)}</div></div>

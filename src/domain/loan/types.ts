@@ -1,4 +1,4 @@
-export type LoanPlanType = 'standard' | 'prepaidInterest';
+export type LoanPlanType = 'standard' | 'prepaidInterest' | 'equalPrincipal';
 
 export type LoanInput = {
   principal: number;
@@ -49,6 +49,9 @@ export type LoanCalculationResult = {
   discountedMonthlyRate?: number;
   prepaidInterestInput?: number;
   realizedPrepaidInterest?: number;
+  monthlyPrincipalAmount?: number;
+  firstInstallmentAmount?: number;
+  lastInstallmentAmount?: number;
   infoMessages?: string[];
   warnings?: string[];
 };

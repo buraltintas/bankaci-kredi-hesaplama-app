@@ -38,6 +38,9 @@ export type RecentCalculation = {
     planType?: LoanPlanType;
     prepaidInterestInput?: number;
     realizedPrepaidInterest?: number;
+    monthlyPrincipalAmount?: number;
+    firstInstallmentAmount?: number;
+    lastInstallmentAmount?: number;
   };
 };
 
@@ -108,9 +111,17 @@ const deserializeForm = (
     term: String(form.term ?? ''),
     creditUsageDate,
     firstInstallmentDate,
-    planType: form.planType === 'prepaidInterest' ? 'prepaidInterest' : 'standard',
+    planType: normalizePlanType(form.planType),
     prepaidInterestAmount: String(form.prepaidInterestAmount ?? ''),
   };
+};
+
+const normalizePlanType = (planType: unknown): LoanPlanType => {
+  if (planType === 'prepaidInterest' || planType === 'equalPrincipal') {
+    return planType;
+  }
+
+  return 'standard';
 };
 
 const deserializeRecentCalculation = (
@@ -132,11 +143,16 @@ const deserializeRecentCalculation = (
       standardInstallment: Number(item.summary.standardInstallment) || 0,
       firstInstallment: Number(item.summary.firstInstallment) || 0,
       totalPayment: Number(item.summary.totalPayment) || 0,
-      planType:
-        item.summary.planType === 'prepaidInterest' ? 'prepaidInterest' : 'standard',
+      planType: normalizePlanType(item.summary.planType),
       prepaidInterestInput: Number(item.summary.prepaidInterestInput) || 0,
       realizedPrepaidInterest:
         Number(item.summary.realizedPrepaidInterest) || 0,
+      monthlyPrincipalAmount:
+        Number(item.summary.monthlyPrincipalAmount) || 0,
+      firstInstallmentAmount:
+        Number(item.summary.firstInstallmentAmount) || 0,
+      lastInstallmentAmount:
+        Number(item.summary.lastInstallmentAmount) || 0,
     },
   };
 };
@@ -191,6 +207,9 @@ export const addRecentCalculation = async (
     planType: result.planType,
     prepaidInterestInput: result.prepaidInterestInput,
     realizedPrepaidInterest: result.realizedPrepaidInterest,
+    monthlyPrincipalAmount: result.monthlyPrincipalAmount,
+    firstInstallmentAmount: result.firstInstallmentAmount,
+    lastInstallmentAmount: result.lastInstallmentAmount,
   };
   const now = new Date().toISOString();
 

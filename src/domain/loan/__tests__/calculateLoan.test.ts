@@ -33,6 +33,16 @@ const sumSchedule = (
       .toFixed(2)
   );
 
+const expectResultTotalsToMatchSchedule = (
+  result: ReturnType<typeof calculateLoan>
+) => {
+  expect(result.totalPayment).toBe(sumSchedule(result.schedule, 'installment'));
+  expect(result.totalPrincipal).toBe(sumSchedule(result.schedule, 'principal'));
+  expect(result.totalInterest).toBe(sumSchedule(result.schedule, 'interest'));
+  expect(result.totalKkdf).toBe(sumSchedule(result.schedule, 'kkdf'));
+  expect(result.totalBsmv).toBe(sumSchedule(result.schedule, 'bsmv'));
+};
+
 describe('calculateLoan', () => {
   it('generates a standard equal installment schedule', () => {
     const result = calculateLoan(baseInput);
@@ -254,6 +264,198 @@ describe('calculateLoan', () => {
     expect(Math.abs(lastRow.remainingPrincipal)).toBeLessThanOrEqual(
       finalPrincipalTolerance
     );
+  });
+
+  describe('equal principal plan', () => {
+    const equalPrincipalInput = {
+      creditUsageDate: new Date(2026, 5, 24),
+      firstInstallmentDate: new Date(2026, 6, 24),
+      planType: 'equalPrincipal' as const,
+    };
+
+    it('matches the tax-free simple case', () => {
+      const result = calculateLoan({
+        ...equalPrincipalInput,
+        principal: 120000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+      });
+
+      expect(result.planType).toBe('equalPrincipal');
+      expect(result.monthlyPrincipalAmount).toBe(10000);
+      expect(result.schedule).toHaveLength(12);
+      expect(result.schedule[0].interest).toBe(3600);
+      expect(result.schedule[0].installment).toBe(13600);
+      expect(result.schedule[1].interest).toBe(3300);
+      expect(result.schedule[1].installment).toBe(13300);
+      expect(result.schedule[11].interest).toBe(300);
+      expect(result.schedule[11].installment).toBe(10300);
+      expect(result.totalPrincipal).toBe(120000);
+      expect(result.totalInterest).toBe(23400);
+      expect(result.totalPayment).toBe(143400);
+      expect(result.schedule[11].remainingPrincipal).toBe(0);
+      expect(result.schedule.some((item) => item.installmentNumber === 0)).toBe(false);
+      expectResultTotalsToMatchSchedule(result);
+    });
+
+    it('matches the taxed simple case', () => {
+      const result = calculateLoan({
+        ...equalPrincipalInput,
+        principal: 120000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 15,
+        bsmvRatePercent: 15,
+      });
+
+      expect(result.monthlyPrincipalAmount).toBe(10000);
+      expect(result.schedule[0].interest).toBe(3600);
+      expect(result.schedule[0].kkdf).toBe(540);
+      expect(result.schedule[0].bsmv).toBe(540);
+      expect(result.schedule[0].installment).toBe(14680);
+      expect(result.schedule[1].interest).toBe(3300);
+      expect(result.schedule[1].kkdf).toBe(495);
+      expect(result.schedule[1].bsmv).toBe(495);
+      expect(result.schedule[1].installment).toBe(14290);
+      expect(result.schedule[11].interest).toBe(300);
+      expect(result.schedule[11].kkdf).toBe(45);
+      expect(result.schedule[11].bsmv).toBe(45);
+      expect(result.schedule[11].installment).toBe(10390);
+      expect(result.totalPrincipal).toBe(120000);
+      expect(result.totalInterest).toBe(23400);
+      expect(result.totalKkdf).toBe(3510);
+      expect(result.totalBsmv).toBe(3510);
+      expect(result.totalPayment).toBe(150420);
+      expect(result.schedule[11].remainingPrincipal).toBe(0);
+      expectResultTotalsToMatchSchedule(result);
+    });
+
+    it('matches the large long-term tax-free case approximately', () => {
+      const result = calculateLoan({
+        ...equalPrincipalInput,
+        principal: 1000000,
+        term: 36,
+        monthlyInterestRatePercent: 3.1,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+      });
+
+      expect(result.monthlyPrincipalAmount).toBe(27777.78);
+      expect(result.schedule[0].interest).toBe(31000);
+      expect(result.schedule[0].installment).toBe(58777.78);
+      expect(result.schedule[1].interest).toBe(30138.89);
+      expect(result.schedule[1].installment).toBe(57916.67);
+      expect(result.schedule[35].interest).toBe(861.11);
+      expect(result.schedule[35].installment).toBe(28638.81);
+      expect(result.totalPrincipal).toBe(1000000);
+      expectCloseWithin(result.totalInterest, 573499.96, 0.05);
+      expectCloseWithin(result.totalPayment, 1573499.96, 0.05);
+      expect(result.schedule[35].remainingPrincipal).toBe(0);
+      expectResultTotalsToMatchSchedule(result);
+    });
+
+    it('matches the taxed medium-term case approximately', () => {
+      const result = calculateLoan({
+        ...equalPrincipalInput,
+        principal: 500000,
+        term: 24,
+        monthlyInterestRatePercent: 4.2,
+        kkdfRatePercent: 15,
+        bsmvRatePercent: 15,
+      });
+
+      expect(result.monthlyPrincipalAmount).toBe(20833.33);
+      expect(result.schedule[0].interest).toBe(21000);
+      expect(result.schedule[0].kkdf).toBe(3150);
+      expect(result.schedule[0].bsmv).toBe(3150);
+      expect(result.schedule[0].installment).toBe(48133.33);
+      expect(result.schedule[1].interest).toBe(20125);
+      expect(result.schedule[1].installment).toBe(46995.83);
+      expect(result.schedule[23].interest).toBe(875);
+      expect(result.schedule[23].kkdf).toBe(131.25);
+      expect(result.schedule[23].bsmv).toBe(131.25);
+      expect(result.schedule[23].installment).toBe(21970.91);
+      expect(result.totalPrincipal).toBe(500000);
+      expect(result.totalInterest).toBe(262500);
+      expect(result.totalKkdf).toBe(39375);
+      expect(result.totalBsmv).toBe(39375);
+      expect(result.totalPayment).toBe(841250);
+      expect(result.schedule[23].remainingPrincipal).toBe(0);
+      expectResultTotalsToMatchSchedule(result);
+    });
+
+    it('closes cent difference on the final principal payment', () => {
+      const result = calculateLoan({
+        ...equalPrincipalInput,
+        principal: 100000,
+        term: 3,
+        monthlyInterestRatePercent: 2,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+      });
+
+      expect(result.schedule.map((item) => item.principal)).toEqual([
+        33333.33,
+        33333.33,
+        33333.34,
+      ]);
+      expect(result.totalPrincipal).toBe(100000);
+      expect(result.totalInterest).toBe(4000);
+      expect(result.totalPayment).toBe(104000);
+      expect(result.schedule[2].remainingPrincipal).toBe(0);
+      expectResultTotalsToMatchSchedule(result);
+    });
+
+    it('keeps equal-principal installments decreasing', () => {
+      const result = calculateLoan({
+        ...equalPrincipalInput,
+        principal: 120000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 15,
+        bsmvRatePercent: 15,
+      });
+
+      expect(
+        result.schedule
+          .slice(1)
+          .every((item, index) => item.installment < result.schedule[index].installment)
+      ).toBe(true);
+    });
+
+    it('applies broken period only to the first equal-principal installment', () => {
+      const regularResult = calculateLoan({
+        ...equalPrincipalInput,
+        principal: 120000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 15,
+        bsmvRatePercent: 15,
+      });
+      const brokenResult = calculateLoan({
+        ...equalPrincipalInput,
+        principal: 120000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 15,
+        bsmvRatePercent: 15,
+        firstInstallmentDate: new Date(2026, 7, 7),
+      });
+
+      expect(brokenResult.brokenPeriod.diffDays).toBeGreaterThan(0);
+      expect(brokenResult.schedule[0].principal).toBe(10000);
+      expect(brokenResult.schedule[0].interest).toBeGreaterThan(
+        regularResult.schedule[0].interest
+      );
+      expect(brokenResult.schedule[1].interest).toBe(regularResult.schedule[1].interest);
+      expect(brokenResult.schedule.map((item) => item.principal)).toEqual(
+        regularResult.schedule.map((item) => item.principal)
+      );
+      expect(brokenResult.schedule[11].remainingPrincipal).toBe(0);
+      expectResultTotalsToMatchSchedule(brokenResult);
+    });
   });
 
   describe('prepaid interest validation matrix', () => {

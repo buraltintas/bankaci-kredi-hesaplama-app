@@ -140,6 +140,45 @@ const buildStandardSchedule = (
   });
 };
 
+const buildEqualPrincipalSchedule = (
+  input: LoanInput,
+  monthlyInterestRate: number,
+  kkdfRate: number,
+  bsmvRate: number
+): PaymentScheduleItem[] => {
+  let remainingPrincipal = input.principal;
+  const monthlyPrincipalAmount = roundToCents(input.principal / input.term);
+
+  return Array.from({ length: input.term }, (_, index) => {
+    const installmentNumber = index + 1;
+    const isLastInstallment = installmentNumber === input.term;
+    const principal = isLastInstallment
+      ? roundToCents(remainingPrincipal)
+      : monthlyPrincipalAmount;
+    const interest = roundToCents(remainingPrincipal * monthlyInterestRate);
+    const kkdf = roundToCents(interest * kkdfRate);
+    const bsmv = roundToCents(interest * bsmvRate);
+    const installment = roundToCents(principal + interest + kkdf + bsmv);
+
+    remainingPrincipal = roundToCents(remainingPrincipal - principal);
+
+    if (isLastInstallment || Math.abs(remainingPrincipal) < 0.01) {
+      remainingPrincipal = 0;
+    }
+
+    return {
+      installmentNumber,
+      date: addMonths(input.firstInstallmentDate, index),
+      installment,
+      principal,
+      interest,
+      kkdf,
+      bsmv,
+      remainingPrincipal,
+    };
+  });
+};
+
 const calculateBrokenPeriod = (
   input: LoanInput,
   monthlyInterestRate: number,
@@ -215,6 +254,7 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
   let prepaidInterestInput: number | undefined;
   let realizedPrepaidInterest: number | undefined;
   let discountedMonthlyRate: number | undefined;
+  let monthlyPrincipalAmount: number | undefined;
 
   if (planType === 'prepaidInterest') {
     prepaidInterestInput = input.prepaidInterestAmount ?? 0;
@@ -273,20 +313,32 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
     kkdfRate,
     bsmvRate
   );
-  const standardSchedule = buildStandardSchedule(
-    input,
-    standardInstallment,
-    effectiveMonthlyInterestRate,
-    kkdfRate,
-    bsmvRate
-  );
+  if (planType === 'equalPrincipal') {
+    monthlyPrincipalAmount = roundToCents(input.principal / input.term);
+  }
+
+  const baseSchedule =
+    planType === 'equalPrincipal'
+      ? buildEqualPrincipalSchedule(
+          input,
+          effectiveMonthlyInterestRate,
+          kkdfRate,
+          bsmvRate
+        )
+      : buildStandardSchedule(
+          input,
+          standardInstallment,
+          effectiveMonthlyInterestRate,
+          kkdfRate,
+          bsmvRate
+        );
   const brokenPeriod = calculateBrokenPeriod(
     input,
     effectiveMonthlyInterestRate,
     kkdfRate,
     bsmvRate
   );
-  let schedule = standardSchedule.map((item) => {
+  let schedule = baseSchedule.map((item) => {
     if (item.installmentNumber !== 1 || brokenPeriod.diffDays === 0) {
       return item;
     }
@@ -364,6 +416,12 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
     discountedMonthlyRate,
     prepaidInterestInput,
     realizedPrepaidInterest,
+    monthlyPrincipalAmount,
+    firstInstallmentAmount:
+      planType === 'prepaidInterest'
+        ? schedule.find((item) => item.installmentNumber === 1)?.installment
+        : schedule[0]?.installment,
+    lastInstallmentAmount: schedule[schedule.length - 1]?.installment,
     infoMessages: [],
     warnings: [],
     ...totals,
