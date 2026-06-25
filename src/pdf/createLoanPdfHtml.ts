@@ -2,6 +2,15 @@ import { formatCurrency } from '../utils/formatCurrency';
 import { formatDate } from '../utils/dateMath';
 import type { LoanCalculationResult } from '../domain/loan/types';
 import { formatCustomPaymentsSummary } from '../domain/loan/customPaymentForm';
+import {
+  getFirstIncreasedInstallmentAmount,
+  INCREASING_INSTALLMENT_PLAN_LABEL,
+} from '../domain/loan/increasingInstallmentSummary';
+import {
+  getInterestOnlyEffectiveInstallmentInfo,
+  getInterestOnlyPeriodInstallmentAmount,
+  INTEREST_ONLY_PLAN_LABEL,
+} from '../domain/loan/interestOnlySummary';
 
 export type LoanPdfContactInfo = {
   fullName: string;
@@ -22,8 +31,12 @@ const getPlanTypeLabel = (result: LoanCalculationResult): string =>
     ? 'Peşin Faiz Ödemeli'
     : result.planType === 'equalPrincipal'
       ? 'Eşit Anapara Ödemeli'
-      : result.planType === 'customPayment'
-        ? 'Özel / Balon Ödeme Planı'
+    : result.planType === 'customPayment'
+      ? 'Özel / Balon Ödeme Planı'
+      : result.planType === 'interestOnly'
+        ? INTEREST_ONLY_PLAN_LABEL
+      : result.planType === 'increasingInstallment'
+        ? INCREASING_INSTALLMENT_PLAN_LABEL
       : 'Standart Sabit Taksitli';
 
 const formatPercent = (
@@ -44,13 +57,23 @@ export const createLoanPdfHtml = (
   const isPrepaidInterest = result.planType === 'prepaidInterest';
   const isEqualPrincipal = result.planType === 'equalPrincipal';
   const isCustomPayment = result.planType === 'customPayment';
+  const isInterestOnly = result.planType === 'interestOnly';
+  const isIncreasingInstallment = result.planType === 'increasingInstallment';
+  const interestOnlyPeriodInstallment =
+    getInterestOnlyPeriodInstallmentAmount(result);
+  const interestOnlyEffectiveInstallmentInfo =
+    getInterestOnlyEffectiveInstallmentInfo(result);
   const hasContactInfo =
     Boolean(contactInfo?.fullName.trim()) && Boolean(contactInfo?.phone.trim());
   const rows = result.schedule
     .map(
       (item) => `
         <tr>
-          <td>${item.installmentNumber}</td>
+          <td>${item.installmentNumber}${
+            item.isInterestOnly
+              ? '<br /><span class="badge">Anapara Ödemesiz</span>'
+              : ''
+          }</td>
           <td>${formatDate(item.date)}</td>
           <td>${formatCurrency(item.principal)}</td>
           <td>${formatCurrency(item.interest)}</td>
@@ -80,8 +103,9 @@ export const createLoanPdfHtml = (
         tr { page-break-inside: avoid; }
         .note { margin-top: 18px; color: #607083; font-size: 10px; }
         .broken { border-left: 4px solid #E67700; padding-left: 10px; margin: 16px 0; font-size: 12px; }
-        .contact { border: 1px solid #D8E1EA; border-radius: 8px; padding: 12px; margin: 16px 0; background: #FFFFFF; }
-        .contact-title { font-size: 13px; font-weight: 800; color: #083D77; margin-bottom: 8px; }
+	        .contact { border: 1px solid #D8E1EA; border-radius: 8px; padding: 12px; margin: 16px 0; background: #FFFFFF; }
+	        .contact-title { font-size: 13px; font-weight: 800; color: #083D77; margin-bottom: 8px; }
+	        .badge { display: inline-block; margin-top: 3px; border-radius: 999px; background: #E7F5FF; color: #083D77; font-size: 8px; font-weight: 800; padding: 2px 5px; }
       </style>
     </head>
     <body>
@@ -112,19 +136,52 @@ export const createLoanPdfHtml = (
               <div class="box"><div class="label">Son taksit tutarı</div><div class="value">${formatCurrency(
                 result.lastInstallmentAmount ?? 0
               )}</div></div>`
-            : isCustomPayment
-              ? `<div class="box"><div class="label">Otomatik taksit</div><div class="value">${formatCurrency(
-                  result.automaticInstallmentAmount ?? 0
-                )}</div></div>
+	            : isCustomPayment
+	              ? `<div class="box"><div class="label">Otomatik taksit</div><div class="value">${formatCurrency(
+	                  result.automaticInstallmentAmount ?? 0
+	                )}</div></div>
                 <div class="box"><div class="label">Özel ödeme sayısı</div><div class="value">${
                   result.input.customPayments?.length ?? 0
                 }</div></div>
                 <div class="box"><div class="label">Son taksit tutarı</div><div class="value">${formatCurrency(
-                  result.lastInstallmentAmount ?? 0
-                )}</div></div>`
+	                  result.lastInstallmentAmount ?? 0
+	                )}</div></div>`
+              : isInterestOnly
+                ? `<div class="box"><div class="label">Anapara Ödemesiz Taksit Sayısı</div><div class="value">${
+                    result.interestOnlyInstallmentCount ?? 0
+                  }</div></div>
+                  <div class="box"><div class="label">Anapara Ödemesiz Dönem Taksiti</div><div class="value">${formatCurrency(
+                    interestOnlyPeriodInstallment
+                  )}</div></div>
+                  <div class="box"><div class="label">Sonraki Dönem Taksiti</div><div class="value">${formatCurrency(
+                    result.postInterestOnlyInstallmentAmount ?? 0
+                  )}</div></div>
+                  <div class="box"><div class="label">Son Taksit</div><div class="value">${formatCurrency(
+                    result.lastInstallmentAmount ?? 0
+                  )}</div></div>`
+              : isIncreasingInstallment
+                ? `<div class="box"><div class="label">Taksit Artış Oranı</div><div class="value">${formatPercent(
+                    result.installmentIncreaseRatePercent ?? 0
+                  )}</div></div>
+                  <div class="box"><div class="label">Artış Sıklığı</div><div class="value">${
+                    result.installmentIncreaseFrequencyMonths ?? 12
+                  } ay</div></div>
+                  <div class="box"><div class="label">İlk Taksit</div><div class="value">${formatCurrency(
+                    result.firstInstallmentAmount ?? result.firstInstallment
+                  )}</div></div>
+                  <div class="box"><div class="label">İlk Artış Sonrası Taksit</div><div class="value">${formatCurrency(
+                    getFirstIncreasedInstallmentAmount(result)
+                  )}</div></div>
+                  <div class="box"><div class="label">Son Taksit</div><div class="value">${formatCurrency(
+                    result.lastInstallmentAmount ?? 0
+                  )}</div></div>`
             : `<div class="box"><div class="label">${isPrepaidInterest ? 'Aylık taksit' : 'Standart aylık taksit'}</div><div class="value">${formatCurrency(result.standardInstallment)}</div></div>`
         }
-        <div class="box"><div class="label">İlk taksit tutarı</div><div class="value">${formatCurrency(result.firstInstallment)}</div></div>
+        ${
+          isIncreasingInstallment
+            ? ''
+            : `<div class="box"><div class="label">İlk taksit tutarı</div><div class="value">${formatCurrency(result.firstInstallment)}</div></div>`
+        }
         <div class="box"><div class="label">Toplam ödeme</div><div class="value">${formatCurrency(result.totalPayment)}</div></div>
         <div class="box"><div class="label">Toplam faiz / KKDF / BSMV</div><div class="value">${formatCurrency(result.totalInterest)} / ${formatCurrency(result.totalKkdf)} / ${formatCurrency(result.totalBsmv)}</div></div>
       </section>
@@ -136,6 +193,17 @@ export const createLoanPdfHtml = (
               Faiz farkı: ${formatCurrency(result.brokenPeriod.interestDiff)}<br />
               KKDF farkı: ${formatCurrency(result.brokenPeriod.kkdfDiff)}<br />
               BSMV farkı: ${formatCurrency(result.brokenPeriod.bsmvDiff)}
+            </section>`
+          : ''
+      }
+      ${
+        interestOnlyEffectiveInstallmentInfo
+          ? `<section class="broken">
+              <strong>Taksit sayısı bilgilendirmesi:</strong><br />
+              ${interestOnlyEffectiveInstallmentInfo
+                .split('\n')
+                .map(escapeHtml)
+                .join('<br />')}
             </section>`
           : ''
       }

@@ -110,4 +110,130 @@ describe('calculatorStorage', () => {
     expect(loadedItems[0].summary.planType).toBe('standard');
     expect(loadedItems[0].form.customPayments).toEqual([]);
   });
+
+  it('keeps interest-only installment count in recent calculations', async () => {
+    const form: LoanFormSnapshot = {
+      loanType: 'Bireysel İhtiyaç/Taşıt Kredisi',
+      amount: '120.000',
+      interestRate: '3',
+      bsmv: '15',
+      kkdf: '15',
+      term: '12',
+      creditUsageDate: new Date(2026, 5, 24),
+      firstInstallmentDate: new Date(2026, 6, 24),
+      planType: 'interestOnly',
+      prepaidInterestAmount: '',
+      interestOnlyInstallmentCount: '3',
+      customPayments: [],
+    };
+    const result = calculateLoan({
+      principal: 120000,
+      term: 12,
+      monthlyInterestRatePercent: 3,
+      kkdfRatePercent: 15,
+      bsmvRatePercent: 15,
+      creditUsageDate: form.creditUsageDate,
+      firstInstallmentDate: form.firstInstallmentDate,
+      planType: 'interestOnly',
+      interestOnlyInstallmentCount: 3,
+    });
+
+    await addRecentCalculation(form, result, []);
+    const loadedItems = await loadRecentCalculations();
+
+    expect(loadedItems[0].form.planType).toBe('interestOnly');
+    expect(loadedItems[0].form.interestOnlyInstallmentCount).toBe('3');
+    expect(loadedItems[0].summary.interestOnlyInstallmentCount).toBe(3);
+    expect(loadedItems[0].summary.postInterestOnlyInstallmentAmount).toBe(
+      result.postInterestOnlyInstallmentAmount
+    );
+  });
+
+  it('keeps increasing installment fields in recent calculations', async () => {
+    const form: LoanFormSnapshot = {
+      loanType: 'Bireysel İhtiyaç/Taşıt Kredisi',
+      amount: '100.000',
+      interestRate: '2',
+      bsmv: '0',
+      kkdf: '0',
+      term: '12',
+      creditUsageDate: new Date(2026, 5, 24),
+      firstInstallmentDate: new Date(2026, 6, 24),
+      planType: 'increasingInstallment',
+      prepaidInterestAmount: '',
+      interestOnlyInstallmentCount: '',
+      installmentIncreaseRatePercent: '5',
+      installmentIncreaseFrequencyMonths: '12',
+      customPayments: [],
+    };
+    const result = calculateLoan({
+      principal: 100000,
+      term: 12,
+      monthlyInterestRatePercent: 2,
+      kkdfRatePercent: 0,
+      bsmvRatePercent: 0,
+      creditUsageDate: form.creditUsageDate,
+      firstInstallmentDate: form.firstInstallmentDate,
+      planType: 'increasingInstallment',
+      installmentIncreaseRatePercent: 5,
+      installmentIncreaseFrequencyMonths: 12,
+    });
+
+    await addRecentCalculation(form, result, []);
+    const loadedItems = await loadRecentCalculations();
+
+    expect(loadedItems[0].form.planType).toBe('increasingInstallment');
+    expect(loadedItems[0].form.installmentIncreaseRatePercent).toBe('5');
+    expect(loadedItems[0].form.installmentIncreaseFrequencyMonths).toBe('12');
+    expect(loadedItems[0].summary.installmentIncreaseRatePercent).toBe(5);
+    expect(loadedItems[0].summary.installmentIncreaseFrequencyMonths).toBe(12);
+    expect(loadedItems[0].summary.baseInstallmentAmount).toBe(
+      result.baseInstallmentAmount
+    );
+    expect(loadedItems[0].summary.firstInstallmentAmount).toBe(
+      result.firstInstallmentAmount
+    );
+    expect(loadedItems[0].summary.lastInstallmentAmount).toBe(
+      result.lastInstallmentAmount
+    );
+  });
+
+  it('loads old increasing installment calculations without frequency as yearly', async () => {
+    await AsyncStorage.setItem(
+      RECENT_CALCULATIONS_KEY,
+      JSON.stringify([
+        {
+          id: 'old-increasing',
+          createdAt: '2026-06-24T00:00:00.000Z',
+          form: {
+            loanType: 'Bireysel İhtiyaç/Taşıt Kredisi',
+            amount: '100.000',
+            interestRate: '2',
+            bsmv: '0',
+            kkdf: '0',
+            term: '12',
+            creditUsageDate: '2026-06-24',
+            firstInstallmentDate: '2026-07-24',
+            planType: 'increasingInstallment',
+            installmentIncreaseRatePercent: '5',
+          },
+          summary: {
+            principal: 100000,
+            term: 12,
+            standardInstallment: 10000,
+            firstInstallment: 7211.19,
+            totalPayment: 114781.33,
+            planType: 'increasingInstallment',
+            installmentIncreaseRatePercent: 5,
+          },
+        },
+      ])
+    );
+
+    const loadedItems = await loadRecentCalculations();
+
+    expect(loadedItems[0].form.planType).toBe('increasingInstallment');
+    expect(loadedItems[0].form.installmentIncreaseFrequencyMonths).toBe('12');
+    expect(loadedItems[0].summary.installmentIncreaseFrequencyMonths).toBe(12);
+  });
 });

@@ -3,6 +3,7 @@ import {
   Alert,
   AppState,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -24,6 +25,13 @@ import { calculateLoan } from '../src/domain/loan/calculateLoan';
 import {
   buildCustomPaymentsFromRows,
 } from '../src/domain/loan/customPaymentForm';
+import {
+  parseInstallmentIncreaseFrequencyMonths,
+  parseInstallmentIncreaseRatePercent,
+} from '../src/domain/loan/increasingInstallmentForm';
+import { INCREASING_INSTALLMENT_PLAN_LABEL } from '../src/domain/loan/increasingInstallmentSummary';
+import { parseInterestOnlyInstallmentCount } from '../src/domain/loan/interestOnlyForm';
+import { INTEREST_ONLY_PLAN_LABEL } from '../src/domain/loan/interestOnlySummary';
 import { buildLoanShareMessage } from '../src/domain/loan/shareSummary';
 import { exportLoanPdf } from '../src/pdf/exportLoanPdf';
 import { useInterstitialAction } from '../src/ads/useInterstitialAction';
@@ -36,16 +44,22 @@ import {
 } from '../src/storage/calculatorStorage';
 import { addMonths, formatDate, startOfLocalDay } from '../src/utils/dateMath';
 import { formatCurrency } from '../src/utils/formatCurrency';
-import { parseNumericInput } from '../src/utils/sanitizeNumericInput';
+import {
+  parseNumericInput,
+  sanitizeNumericInput,
+} from '../src/utils/sanitizeNumericInput';
 
 const today = startOfLocalDay(new Date());
 const ACTION_BUTTON_HEIGHT = 54;
 const ACTION_BAR_VERTICAL_PADDING = spacing.lg;
+const ABOUT_WEBSITE_URL = 'https://burak-altintas.com';
 const PLAN_TYPE_LABELS = {
   standard: 'Standart Sabit Taksitli',
   prepaidInterest: 'Peşin Faiz Ödemeli',
   equalPrincipal: 'Eşit Anapara Ödemeli',
   customPayment: 'Özel / Balon Ödeme Planı',
+  interestOnly: INTEREST_ONLY_PLAN_LABEL,
+  increasingInstallment: INCREASING_INSTALLMENT_PLAN_LABEL,
 };
 
 const createCustomPaymentRow = () => ({
@@ -68,6 +82,14 @@ const LoanCalculator = () => {
   const [term, setTerm] = useState('');
   const [planType, setPlanType] = useState('standard');
   const [prepaidInterestAmount, setPrepaidInterestAmount] = useState('');
+  const [interestOnlyInstallmentCount, setInterestOnlyInstallmentCount] =
+    useState('');
+  const [installmentIncreaseRatePercent, setInstallmentIncreaseRatePercent] =
+    useState('');
+  const [
+    installmentIncreaseFrequencyMonths,
+    setInstallmentIncreaseFrequencyMonths,
+  ] = useState('12');
   const [customPaymentRows, setCustomPaymentRows] = useState([
     createCustomPaymentRow(),
   ]);
@@ -82,6 +104,7 @@ const LoanCalculator = () => {
   const [foregroundPaintTick, setForegroundPaintTick] = useState(0);
   const [recentCalculations, setRecentCalculations] = useState([]);
   const [isRecentCalculationsOpen, setIsRecentCalculationsOpen] = useState(false);
+  const [isAboutModalVisible, setIsAboutModalVisible] = useState(false);
   const [hasLoadedStoredState, setHasLoadedStoredState] = useState(false);
   const {
     isInterstitialActionRunning,
@@ -166,6 +189,14 @@ const LoanCalculator = () => {
     }, 120);
   };
 
+  const handleOpenAboutWebsite = async () => {
+    try {
+      await Linking.openURL(ABOUT_WEBSITE_URL);
+    } catch {
+      Alert.alert('Bağlantı açılamadı', 'burak-altintas.com adresi açılamadı.');
+    }
+  };
+
   const buildFormSnapshot = () => ({
     loanType,
     amount,
@@ -175,6 +206,9 @@ const LoanCalculator = () => {
     term,
     planType,
     prepaidInterestAmount,
+    interestOnlyInstallmentCount,
+    installmentIncreaseRatePercent,
+    installmentIncreaseFrequencyMonths,
     customPayments: customPaymentRows.map(({ installmentNo, amount }) => ({
       installmentNo,
       amount,
@@ -192,6 +226,15 @@ const LoanCalculator = () => {
     setTerm(formSnapshot.term);
     setPlanType(formSnapshot.planType ?? 'standard');
     setPrepaidInterestAmount(formSnapshot.prepaidInterestAmount ?? '');
+    setInterestOnlyInstallmentCount(
+      formSnapshot.interestOnlyInstallmentCount ?? ''
+    );
+    setInstallmentIncreaseRatePercent(
+      formSnapshot.installmentIncreaseRatePercent ?? ''
+    );
+    setInstallmentIncreaseFrequencyMonths(
+      formSnapshot.installmentIncreaseFrequencyMonths ?? '12'
+    );
     setCustomPaymentRows(
       formSnapshot.customPayments?.length
         ? formSnapshot.customPayments.map((payment) => ({
@@ -277,6 +320,24 @@ const LoanCalculator = () => {
         throw new Error('Peşin faiz tutarı kredi tutarından küçük olmalıdır.');
       }
     }
+    const parsedInterestOnlyInstallmentCount =
+      planType === 'interestOnly'
+        ? parseInterestOnlyInstallmentCount(
+            interestOnlyInstallmentCount,
+            termCount.value
+          )
+        : undefined;
+    const parsedInstallmentIncreaseRatePercent =
+      planType === 'increasingInstallment'
+        ? parseInstallmentIncreaseRatePercent(installmentIncreaseRatePercent)
+        : undefined;
+    const parsedInstallmentIncreaseFrequencyMonths =
+      planType === 'increasingInstallment'
+        ? parseInstallmentIncreaseFrequencyMonths(
+            installmentIncreaseFrequencyMonths,
+            termCount.value
+          )
+        : undefined;
     const customPayments =
       planType === 'customPayment'
         ? buildCustomPaymentsFromRows(
@@ -299,6 +360,10 @@ const LoanCalculator = () => {
       planType,
       prepaidInterestAmount:
         planType === 'prepaidInterest' ? prepaidInterest.value : undefined,
+      interestOnlyInstallmentCount: parsedInterestOnlyInstallmentCount,
+      installmentIncreaseRatePercent: parsedInstallmentIncreaseRatePercent,
+      installmentIncreaseFrequencyMonths:
+        parsedInstallmentIncreaseFrequencyMonths,
       customPayments,
     };
   };
@@ -314,6 +379,26 @@ const LoanCalculator = () => {
       recentPlanType === 'customPayment'
         ? buildCustomPaymentsFromRows(
             recentCalculation.form.customPayments ?? [],
+            recentCalculation.summary.term
+          )
+        : undefined;
+    const interestOnlyInstallmentCount =
+      recentPlanType === 'interestOnly'
+        ? parseInterestOnlyInstallmentCount(
+            recentCalculation.form.interestOnlyInstallmentCount ?? '',
+            recentCalculation.summary.term
+          )
+        : undefined;
+    const installmentIncreaseRatePercent =
+      recentPlanType === 'increasingInstallment'
+        ? parseInstallmentIncreaseRatePercent(
+            recentCalculation.form.installmentIncreaseRatePercent ?? ''
+          )
+        : undefined;
+    const installmentIncreaseFrequencyMonths =
+      recentPlanType === 'increasingInstallment'
+        ? parseInstallmentIncreaseFrequencyMonths(
+            recentCalculation.form.installmentIncreaseFrequencyMonths ?? '12',
             recentCalculation.summary.term
           )
         : undefined;
@@ -333,8 +418,32 @@ const LoanCalculator = () => {
         recentPlanType === 'prepaidInterest' && prepaidInterest.isValid
           ? prepaidInterest.value
           : undefined,
+      interestOnlyInstallmentCount,
+      installmentIncreaseRatePercent,
+      installmentIncreaseFrequencyMonths,
       customPayments,
     };
+  };
+
+  const handleInterestOnlyInstallmentCountChange = (value) => {
+    setInterestOnlyInstallmentCount(
+      value.replace(/\s/g, '').replace(/[^0-9,.-]/g, '')
+    );
+    clearResult();
+  };
+
+  const handleInstallmentIncreaseRateChange = (value) => {
+    setInstallmentIncreaseRatePercent(
+      value.replace(/\s/g, '').replace(/[^0-9,.-]/g, '')
+    );
+    clearResult();
+  };
+
+  const handleInstallmentIncreaseFrequencyChange = (value) => {
+    setInstallmentIncreaseFrequencyMonths(
+      sanitizeNumericInput(value, 'integer')
+    );
+    clearResult();
   };
 
   const handleCustomPaymentRowChange = (id, field, value) => {
@@ -522,6 +631,80 @@ const LoanCalculator = () => {
     });
   };
 
+  const getRecentInstallmentSummary = (recentCalculation) => {
+    const recentPlanType = recentCalculation.form.planType ?? 'standard';
+
+    if (recentPlanType === 'customPayment') {
+      return `Otomatik ${formatCurrency(
+        recentCalculation.summary.automaticInstallmentAmount ?? 0
+      )}`;
+    }
+
+    if (recentPlanType === 'equalPrincipal') {
+      return `İlk / Son ${formatCurrency(
+        recentCalculation.summary.firstInstallmentAmount ??
+          recentCalculation.summary.firstInstallment
+      )} / ${formatCurrency(
+        recentCalculation.summary.lastInstallmentAmount ??
+          recentCalculation.summary.firstInstallment
+      )}`;
+    }
+
+    if (recentPlanType === 'interestOnly') {
+      return `Sonraki dönem ${formatCurrency(
+        recentCalculation.summary.postInterestOnlyInstallmentAmount ?? 0
+      )}`;
+    }
+
+    if (recentPlanType === 'increasingInstallment') {
+      return `İlk / Son ${formatCurrency(
+        recentCalculation.summary.firstInstallmentAmount ??
+          recentCalculation.summary.firstInstallment
+      )} / ${formatCurrency(
+        recentCalculation.summary.lastInstallmentAmount ??
+          recentCalculation.summary.firstInstallment
+      )}`;
+    }
+
+    return `Aylık ${formatCurrency(recentCalculation.summary.standardInstallment)}`;
+  };
+
+  const getRecentPlanDetail = (recentCalculation) => {
+    const recentPlanType = recentCalculation.form.planType ?? 'standard';
+
+    if (recentPlanType === 'prepaidInterest') {
+      return ` · Peşin ${formatCurrency(
+        recentCalculation.summary.realizedPrepaidInterest ?? 0
+      )}`;
+    }
+
+    if (recentPlanType === 'customPayment') {
+      return ` · ${recentCalculation.form.customPayments?.length ?? 0} özel`;
+    }
+
+    if (recentPlanType === 'interestOnly') {
+      return ` · ${
+        recentCalculation.form.interestOnlyInstallmentCount ??
+        recentCalculation.summary.interestOnlyInstallmentCount ??
+        0
+      } anapara ödemesiz`;
+    }
+
+    if (recentPlanType === 'increasingInstallment') {
+      return ` · %${
+        recentCalculation.form.installmentIncreaseRatePercent ??
+        recentCalculation.summary.installmentIncreaseRatePercent ??
+        0
+      } artış · ${
+        recentCalculation.form.installmentIncreaseFrequencyMonths ??
+        recentCalculation.summary.installmentIncreaseFrequencyMonths ??
+        12
+      } ayda bir`;
+    }
+
+    return '';
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
@@ -556,7 +739,14 @@ const LoanCalculator = () => {
               <Text style={styles.eyebrow}>Bankacı</Text>
               <Text style={styles.title}>Kredi Hesaplama</Text>
             </View>
-
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Bankacı: Kredi Hesaplama hakkında"
+              style={styles.infoButton}
+              onPress={() => setIsAboutModalVisible(true)}
+            >
+              <Feather name="info" size={20} color={colors.primary} />
+            </TouchableOpacity>
           </View>
 
           <View style={styles.card}>
@@ -682,6 +872,46 @@ const LoanCalculator = () => {
                 }}
                 placeholder="Örn. 50.000"
               />
+            ) : null}
+
+            {planType === 'interestOnly' ? (
+              <>
+                <Text style={styles.label}>Anapara ödemesiz taksit sayısı</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={interestOnlyInstallmentCount}
+                  onChangeText={handleInterestOnlyInstallmentCountChange}
+                  placeholder="Örn. 6"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="decimal-pad"
+                  returnKeyType="done"
+                />
+              </>
+            ) : null}
+
+            {planType === 'increasingInstallment' ? (
+              <>
+                <Text style={styles.label}>Taksit Artış Oranı (%)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={installmentIncreaseRatePercent}
+                  onChangeText={handleInstallmentIncreaseRateChange}
+                  placeholder="Örn. 5 veya 2,5"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="decimal-pad"
+                  returnKeyType="done"
+                />
+                <Text style={styles.label}>Artış Sıklığı (Ay)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={installmentIncreaseFrequencyMonths}
+                  onChangeText={handleInstallmentIncreaseFrequencyChange}
+                  placeholder="Örn. 12"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  returnKeyType="done"
+                />
+              </>
             ) : null}
 
             {planType === 'customPayment' ? (
@@ -847,6 +1077,70 @@ const LoanCalculator = () => {
             </Modal>
           ) : null}
 
+          <Modal
+            transparent
+            animationType="fade"
+            visible={isAboutModalVisible}
+            onRequestClose={() => setIsAboutModalVisible(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              style={styles.aboutOverlay}
+              onPress={() => setIsAboutModalVisible(false)}
+            >
+              <TouchableOpacity
+                activeOpacity={1}
+                style={styles.aboutSheet}
+                onPress={() => undefined}
+              >
+                <Text style={styles.aboutTitle}>
+                  Bankacı: Kredi Hesaplama hakkında
+                </Text>
+                <ScrollView
+                  style={styles.aboutContent}
+                  contentContainerStyle={styles.aboutContentInner}
+                  showsVerticalScrollIndicator
+                >
+                  <Text style={styles.aboutText}>
+                    Bu uygulama, kredi hesaplamalarını sahada ve müşteri
+                    görüşmelerinde daha hızlı, pratik ve anlaşılır şekilde
+                    yapabilmek için geliştirildi.
+                  </Text>
+                  <Text style={styles.aboutText}>
+                    Standart taksitli kredi hesaplamasının yanında; peşin faiz
+                    ödemeli, eşit anapara, özel/balon ödeme, anapara ödemesiz
+                    dönem ve artan taksitli ödeme planları gibi gelişmiş
+                    senaryoları da destekler.
+                  </Text>
+                  <Text style={styles.aboutText}>
+                    Uygulamanın gelişmiş ödeme planı özelliklerinin
+                    şekillenmesinde, aktif bankacılık tecrübesiyle değerli geri
+                    bildirimler sağlayan{' '}
+                    <Text style={styles.aboutStrong}>Yasin Aslantürk</Text>’e
+                    teşekkür ederim.
+                  </Text>
+                  <Text style={styles.aboutText}>
+                    Geri bildirim ve iletişim için:
+                  </Text>
+                  <TouchableOpacity
+                    accessibilityRole="link"
+                    style={styles.aboutLinkButton}
+                    onPress={handleOpenAboutWebsite}
+                  >
+                    <Text style={styles.aboutLink}>burak-altintas.com</Text>
+                    <Feather name="external-link" size={17} color={colors.primary} />
+                  </TouchableOpacity>
+                </ScrollView>
+                <TouchableOpacity
+                  style={styles.aboutCloseButton}
+                  onPress={() => setIsAboutModalVisible(false)}
+                >
+                  <Text style={styles.aboutCloseText}>Kapat</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
+
           <View style={styles.card}>
             <TouchableOpacity
               style={styles.contactToggle}
@@ -942,27 +1236,7 @@ const LoanCalculator = () => {
                           </TouchableOpacity>
                         </View>
                         <Text style={styles.recentItemText}>
-                          {recentCalculation.form.planType === 'customPayment'
-                            ? 'Otomatik '
-                            : recentCalculation.form.planType === 'equalPrincipal'
-                            ? 'İlk / Son '
-                            : 'Aylık '}
-                          {recentCalculation.form.planType === 'customPayment'
-                            ? formatCurrency(
-                                recentCalculation.summary
-                                  .automaticInstallmentAmount ?? 0
-                              )
-                            : recentCalculation.form.planType === 'equalPrincipal'
-                            ? `${formatCurrency(
-                                recentCalculation.summary.firstInstallmentAmount ??
-                                  recentCalculation.summary.firstInstallment
-                              )} / ${formatCurrency(
-                                recentCalculation.summary.lastInstallmentAmount ??
-                                  recentCalculation.summary.firstInstallment
-                              )}`
-                            : formatCurrency(
-                                recentCalculation.summary.standardInstallment
-                              )}
+                          {getRecentInstallmentSummary(recentCalculation)}
                           {' · '}%
                           {recentCalculation.form.interestRate} faiz
                         </Text>
@@ -970,16 +1244,7 @@ const LoanCalculator = () => {
                           {PLAN_TYPE_LABELS[
                             recentCalculation.form.planType ?? 'standard'
                           ]}
-                          {recentCalculation.form.planType === 'prepaidInterest'
-                            ? ` · Peşin ${formatCurrency(
-                                recentCalculation.summary
-                                  .realizedPrepaidInterest ?? 0
-                              )}`
-                            : recentCalculation.form.planType === 'customPayment'
-                              ? ` · ${
-                                  recentCalculation.form.customPayments?.length ?? 0
-                                } özel`
-                            : ''}
+                          {getRecentPlanDetail(recentCalculation)}
                         </Text>
                         <Text style={styles.recentItemText}>
                           {formatDate(recentCalculation.form.creditUsageDate)} →{' '}
@@ -1107,6 +1372,17 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.title,
     fontWeight: '800',
+  },
+  infoButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+    ...shadows.card,
   },
   card: {
     backgroundColor: colors.surface,
@@ -1289,6 +1565,80 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   datePickerDoneText: {
+    color: colors.surface,
+    fontSize: typography.body,
+    fontWeight: '900',
+  },
+  aboutOverlay: {
+    backgroundColor: 'rgba(15, 23, 42, 0.42)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  aboutSheet: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    gap: spacing.md,
+    maxHeight: '82%',
+    padding: spacing.lg,
+    width: '100%',
+    ...shadows.card,
+  },
+  aboutContent: {
+    flexGrow: 0,
+    width: '100%',
+  },
+  aboutContentInner: {
+    gap: spacing.md,
+    paddingRight: spacing.xs,
+  },
+  aboutTitle: {
+    color: colors.text,
+    fontSize: typography.sectionTitle,
+    fontWeight: '900',
+    lineHeight: 26,
+    width: '100%',
+  },
+  aboutText: {
+    color: colors.text,
+    flexShrink: 1,
+    fontSize: typography.body,
+    fontWeight: '600',
+    lineHeight: 23,
+    width: '100%',
+  },
+  aboutStrong: {
+    fontWeight: '900',
+  },
+  aboutLinkButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    maxWidth: '100%',
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  aboutLink: {
+    color: colors.primary,
+    flexShrink: 1,
+    fontSize: typography.body,
+    fontWeight: '900',
+  },
+  aboutCloseButton: {
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    minHeight: 48,
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+  },
+  aboutCloseText: {
     color: colors.surface,
     fontSize: typography.body,
     fontWeight: '900',

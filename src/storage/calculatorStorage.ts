@@ -17,6 +17,9 @@ export type LoanFormSnapshot = {
   firstInstallmentDate: Date;
   planType?: LoanPlanType;
   prepaidInterestAmount?: string;
+  interestOnlyInstallmentCount?: string;
+  installmentIncreaseRatePercent?: string;
+  installmentIncreaseFrequencyMonths?: string;
   customPayments?: Array<{
     installmentNo: string;
     amount: string;
@@ -47,6 +50,11 @@ export type RecentCalculation = {
     lastInstallmentAmount?: number;
     automaticInstallmentAmount?: number;
     customPaymentCount?: number;
+    interestOnlyInstallmentCount?: number;
+    postInterestOnlyInstallmentAmount?: number;
+    installmentIncreaseRatePercent?: number;
+    installmentIncreaseFrequencyMonths?: number;
+    baseInstallmentAmount?: number;
   };
 };
 
@@ -119,6 +127,14 @@ const deserializeForm = (
     firstInstallmentDate,
     planType: normalizePlanType(form.planType),
     prepaidInterestAmount: String(form.prepaidInterestAmount ?? ''),
+    interestOnlyInstallmentCount: String(form.interestOnlyInstallmentCount ?? ''),
+    installmentIncreaseRatePercent: String(
+      form.installmentIncreaseRatePercent ?? ''
+    ),
+    installmentIncreaseFrequencyMonths: String(
+      form.installmentIncreaseFrequencyMonths ??
+        (normalizePlanType(form.planType) === 'increasingInstallment' ? '12' : '')
+    ),
     customPayments: deserializeCustomPayments(form.customPayments),
   };
 };
@@ -127,7 +143,9 @@ const normalizePlanType = (planType: unknown): LoanPlanType => {
   if (
     planType === 'prepaidInterest' ||
     planType === 'equalPrincipal' ||
-    planType === 'customPayment'
+    planType === 'customPayment' ||
+    planType === 'interestOnly' ||
+    planType === 'increasingInstallment'
   ) {
     return planType;
   }
@@ -180,6 +198,18 @@ const deserializeRecentCalculation = (
       automaticInstallmentAmount:
         Number(item.summary.automaticInstallmentAmount) || 0,
       customPaymentCount: Number(item.summary.customPaymentCount) || 0,
+      interestOnlyInstallmentCount:
+        Number(item.summary.interestOnlyInstallmentCount) || 0,
+      postInterestOnlyInstallmentAmount:
+        Number(item.summary.postInterestOnlyInstallmentAmount) || 0,
+      installmentIncreaseRatePercent:
+        Number(item.summary.installmentIncreaseRatePercent) || 0,
+      installmentIncreaseFrequencyMonths:
+        Number(item.summary.installmentIncreaseFrequencyMonths) ||
+        (normalizePlanType(item.summary.planType) === 'increasingInstallment'
+          ? 12
+          : 0),
+      baseInstallmentAmount: Number(item.summary.baseInstallmentAmount) || 0,
     },
   };
 };
@@ -215,6 +245,12 @@ const isSameFormSnapshot = (
   (a.planType ?? 'standard') === (b.planType ?? 'standard') &&
   String(a.prepaidInterestAmount ?? '') ===
     String(b.prepaidInterestAmount ?? '') &&
+  String(a.interestOnlyInstallmentCount ?? '') ===
+    String(b.interestOnlyInstallmentCount ?? '') &&
+  String(a.installmentIncreaseRatePercent ?? '') ===
+    String(b.installmentIncreaseRatePercent ?? '') &&
+  String(a.installmentIncreaseFrequencyMonths ?? '') ===
+    String(b.installmentIncreaseFrequencyMonths ?? '') &&
   JSON.stringify(a.customPayments ?? []) ===
     JSON.stringify(b.customPayments ?? []) &&
   formatDateForFileName(a.creditUsageDate) ===
@@ -241,6 +277,12 @@ export const addRecentCalculation = async (
     lastInstallmentAmount: result.lastInstallmentAmount,
     automaticInstallmentAmount: result.automaticInstallmentAmount,
     customPaymentCount: result.input.customPayments?.length,
+    interestOnlyInstallmentCount: result.interestOnlyInstallmentCount,
+    postInterestOnlyInstallmentAmount: result.postInterestOnlyInstallmentAmount,
+    installmentIncreaseRatePercent: result.installmentIncreaseRatePercent,
+    installmentIncreaseFrequencyMonths:
+      result.installmentIncreaseFrequencyMonths,
+    baseInstallmentAmount: result.baseInstallmentAmount,
   };
   const now = new Date().toISOString();
 

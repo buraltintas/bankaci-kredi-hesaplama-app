@@ -22,6 +22,7 @@ describe('sanitizeNumericInput', () => {
 
   it('keeps term inputs as positive integers only', () => {
     expect(sanitizeNumericInput('12.5', 'integer')).toBe('12');
+    expect(sanitizeNumericInput('12,5', 'integer')).toBe('12');
     expect(parseNumericInput('12.5', 'integer')).toEqual({
       isValid: true,
       value: 12,

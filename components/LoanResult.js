@@ -6,12 +6,23 @@ import { colors, radius, shadows, spacing, typography } from '../src/design/toke
 import { formatCurrency } from '../src/utils/formatCurrency';
 import { formatDate } from '../src/utils/dateMath';
 import { formatCustomPaymentsSummary } from '../src/domain/loan/customPaymentForm';
+import {
+  getFirstIncreasedInstallmentAmount,
+  INCREASING_INSTALLMENT_PLAN_LABEL,
+} from '../src/domain/loan/increasingInstallmentSummary';
+import {
+  getInterestOnlyEffectiveInstallmentInfo,
+  getInterestOnlyPeriodInstallmentAmount,
+  INTEREST_ONLY_PLAN_LABEL,
+} from '../src/domain/loan/interestOnlySummary';
 
 const PLAN_TYPE_LABELS = {
   standard: 'Standart Sabit Taksitli',
   prepaidInterest: 'Peşin Faiz Ödemeli',
   equalPrincipal: 'Eşit Anapara Ödemeli',
   customPayment: 'Özel / Balon Ödeme Planı',
+  interestOnly: INTEREST_ONLY_PLAN_LABEL,
+  increasingInstallment: INCREASING_INSTALLMENT_PLAN_LABEL,
 };
 
 const formatPercent = (value, fractionDigits = 4, minimumFractionDigits = 0) =>
@@ -39,6 +50,7 @@ const ScheduleRow = ({ item }) => (
           ? '0. Taksit Peşin Faiz'
           : `${item.installmentNumber}. Taksit`}
         {item.isCustomPayment ? ' · Özel' : ''}
+        {item.isInterestOnly ? ' · Anapara Ödemesiz' : ''}
       </Text>
       <Text style={styles.scheduleDate}>{formatDate(item.date)}</Text>
     </View>
@@ -63,13 +75,28 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
   const isPrepaidInterest = result.planType === 'prepaidInterest';
   const isEqualPrincipal = result.planType === 'equalPrincipal';
   const isCustomPayment = result.planType === 'customPayment';
+  const isInterestOnly = result.planType === 'interestOnly';
+  const isIncreasingInstallment = result.planType === 'increasingInstallment';
+  const interestOnlyPeriodInstallment = getInterestOnlyPeriodInstallmentAmount(result);
+  const interestOnlyEffectiveInstallmentInfo =
+    getInterestOnlyEffectiveInstallmentInfo(result);
   const heroLabel = isCustomPayment
     ? 'Otomatik Taksit'
+    : isIncreasingInstallment
+      ? 'İlk Taksit / Son Taksit'
+    : isInterestOnly
+      ? 'Sonraki Dönem Taksiti'
     : isEqualPrincipal
       ? 'İlk Taksit / Son Taksit'
       : 'Aylık Taksit';
   const heroValue = isCustomPayment
     ? formatCurrency(result.automaticInstallmentAmount ?? 0)
+    : isIncreasingInstallment
+      ? `${formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)} / ${formatCurrency(
+          result.lastInstallmentAmount ?? result.firstInstallment
+        )}`
+    : isInterestOnly
+      ? formatCurrency(result.postInterestOnlyInstallmentAmount ?? 0)
     : isEqualPrincipal
     ? `${formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)} / ${formatCurrency(
         result.lastInstallmentAmount ?? result.firstInstallment
@@ -77,6 +104,14 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
     : formatCurrency(result.standardInstallment);
   const heroSubValue = isCustomPayment
     ? `${result.input.customPayments?.length ?? 0} özel ödeme`
+    : isIncreasingInstallment
+    ? `Taksitler her ${
+        result.installmentIncreaseFrequencyMonths ?? 12
+      } ayda bir %${result.installmentIncreaseRatePercent ?? 0} oranında artar`
+    : isInterestOnly
+    ? `${result.interestOnlyInstallmentCount ?? 0} anapara ödemesiz taksit · İlk taksit ${formatCurrency(
+        result.firstInstallment
+      )}`
     : isEqualPrincipal
     ? `Aylık anapara ${formatCurrency(result.monthlyPrincipalAmount ?? 0)}`
     : `İlk taksit ${formatCurrency(result.firstInstallment)}`;
@@ -160,6 +195,54 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
                 />
               </>
             ) : null}
+            {isInterestOnly ? (
+              <>
+                <SummaryMetric
+                  label="Anapara Ödemesiz Taksit Sayısı"
+                  value={`${result.interestOnlyInstallmentCount ?? 0}`}
+                />
+                <SummaryMetric
+                  label="Anapara Ödemesiz Dönem Taksiti"
+                  value={formatCurrency(interestOnlyPeriodInstallment)}
+                />
+                <SummaryMetric
+                  label="Sonraki Dönem Taksiti"
+                  value={formatCurrency(result.postInterestOnlyInstallmentAmount ?? 0)}
+                />
+                <SummaryMetric
+                  label="İlk Taksit"
+                  value={formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)}
+                />
+                <SummaryMetric
+                  label="Son Taksit"
+                  value={formatCurrency(result.lastInstallmentAmount ?? 0)}
+                />
+              </>
+            ) : null}
+            {isIncreasingInstallment ? (
+              <>
+                <SummaryMetric
+                  label="Taksit Artış Oranı"
+                  value={`%${result.installmentIncreaseRatePercent ?? 0}`}
+                />
+                <SummaryMetric
+                  label="Artış Sıklığı"
+                  value={`${result.installmentIncreaseFrequencyMonths ?? 12} ay`}
+                />
+                <SummaryMetric
+                  label="İlk Taksit"
+                  value={formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)}
+                />
+                <SummaryMetric
+                  label="İlk Artış Sonrası Taksit"
+                  value={formatCurrency(getFirstIncreasedInstallmentAmount(result))}
+                />
+                <SummaryMetric
+                  label="Son Taksit"
+                  value={formatCurrency(result.lastInstallmentAmount ?? 0)}
+                />
+              </>
+            ) : null}
             <SummaryMetric label="Toplam Faiz" value={formatCurrency(result.totalInterest)} />
             <SummaryMetric label="Toplam BSMV" value={formatCurrency(result.totalBsmv)} />
             <SummaryMetric label="Toplam KKDF" value={formatCurrency(result.totalKkdf)} />
@@ -190,6 +273,18 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
                   {formatCurrency(result.brokenPeriod.interestDiff)}, KKDF{' '}
                   {formatCurrency(result.brokenPeriod.kkdfDiff)}, BSMV{' '}
                   {formatCurrency(result.brokenPeriod.bsmvDiff)}.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          {interestOnlyEffectiveInstallmentInfo ? (
+            <View style={styles.brokenBox}>
+              <Feather name="info" size={18} color={colors.warning} />
+              <View style={styles.brokenTextWrapper}>
+                <Text style={styles.brokenTitle}>Taksit sayısı bilgilendirmesi</Text>
+                <Text style={styles.brokenText}>
+                  {interestOnlyEffectiveInstallmentInfo}
                 </Text>
               </View>
             </View>
@@ -239,6 +334,16 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
                   ? `${result.schedule.length} taksit · ${
                       result.input.customPayments?.length ?? 0
                     } özel ödeme`
+                : isInterestOnly
+                  ? `${result.schedule.length} taksit · ${
+                      result.interestOnlyInstallmentCount ?? 0
+                    } anapara ödemesiz`
+                : isIncreasingInstallment
+                  ? `${result.schedule.length} taksit · %${
+                      result.installmentIncreaseRatePercent ?? 0
+                    } artış · ${
+                      result.installmentIncreaseFrequencyMonths ?? 12
+                    } ayda bir`
                 : isEqualPrincipal
                   ? `${result.schedule.length} azalan taksit detaylı ödeme planı`
                 : `${result.schedule.length} taksit detaylı amortisman tablosu`}

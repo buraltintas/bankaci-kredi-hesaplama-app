@@ -3,5 +3,7 @@ export const roundToCents = (value: number): number => {
     return 0;
   }
 
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
+
+  return Object.is(rounded, -0) ? 0 : rounded;
 };

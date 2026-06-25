@@ -2,7 +2,9 @@ export type LoanPlanType =
   | 'standard'
   | 'prepaidInterest'
   | 'equalPrincipal'
-  | 'customPayment';
+  | 'customPayment'
+  | 'interestOnly'
+  | 'increasingInstallment';
 
 export type LoanInput = {
   principal: number;
@@ -14,6 +16,9 @@ export type LoanInput = {
   firstInstallmentDate: Date;
   planType?: LoanPlanType;
   prepaidInterestAmount?: number;
+  interestOnlyInstallmentCount?: number;
+  installmentIncreaseRatePercent?: number;
+  installmentIncreaseFrequencyMonths?: number;
   customPayments?: Array<{
     installmentNo: number;
     amount: number;
@@ -31,6 +36,8 @@ export type PaymentScheduleItem = {
   remainingPrincipal: number;
   isPrepaidInterest?: boolean;
   isCustomPayment?: boolean;
+  isInterestOnly?: boolean;
+  isIncreasingInstallment?: boolean;
 };
 
 export type BrokenPeriodInfo = {
@@ -59,6 +66,11 @@ export type LoanCalculationResult = {
   prepaidInterestInput?: number;
   realizedPrepaidInterest?: number;
   monthlyPrincipalAmount?: number;
+  interestOnlyInstallmentCount?: number;
+  postInterestOnlyInstallmentAmount?: number;
+  installmentIncreaseRatePercent?: number;
+  installmentIncreaseFrequencyMonths?: number;
+  baseInstallmentAmount?: number;
   firstInstallmentAmount?: number;
   lastInstallmentAmount?: number;
   automaticInstallmentAmount?: number;

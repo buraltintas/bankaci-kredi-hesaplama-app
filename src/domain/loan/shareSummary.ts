@@ -2,12 +2,20 @@ import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/dateMath';
 import type { LoanCalculationResult, LoanPlanType } from './types';
 import { formatCustomPaymentsSummary } from './customPaymentForm';
+import { INCREASING_INSTALLMENT_PLAN_LABEL } from './increasingInstallmentSummary';
+import {
+  getInterestOnlyEffectiveInstallmentInfo,
+  getInterestOnlyPeriodInstallmentAmount,
+  INTEREST_ONLY_PLAN_LABEL,
+} from './interestOnlySummary';
 
 const PLAN_TYPE_LABELS: Record<LoanPlanType, string> = {
   standard: 'Standart Sabit Taksitli',
   prepaidInterest: 'Peşin Faiz Ödemeli',
   equalPrincipal: 'Eşit Anapara Ödemeli',
   customPayment: 'Özel / Balon Ödeme Planı',
+  interestOnly: INTEREST_ONLY_PLAN_LABEL,
+  increasingInstallment: INCREASING_INSTALLMENT_PLAN_LABEL,
 };
 
 const formatDiscountedRate = (value: number | undefined): string =>
@@ -32,6 +40,34 @@ ${formatCustomPaymentsSummary(result.input.customPayments ?? [])}`;
 Son taksit: ${formatCurrency(result.lastInstallmentAmount ?? 0)}
 Toplam ödeme: ${formatCurrency(result.totalPayment)}
 Plan Tipi: ${PLAN_TYPE_LABELS.equalPrincipal}`;
+  }
+
+  if (result.planType === 'interestOnly') {
+    const effectiveInstallmentInfo =
+      getInterestOnlyEffectiveInstallmentInfo(result);
+
+    return `Anapara ödemesiz taksit sayısı: ${
+      result.interestOnlyInstallmentCount ?? 0
+    }
+Anapara ödemesiz dönem taksiti: ${formatCurrency(
+      getInterestOnlyPeriodInstallmentAmount(result)
+    )}
+Sonraki dönem taksiti: ${formatCurrency(
+      result.postInterestOnlyInstallmentAmount ?? 0
+    )}
+Toplam ödeme: ${formatCurrency(result.totalPayment)}
+Plan Tipi: ${PLAN_TYPE_LABELS.interestOnly}${
+      effectiveInstallmentInfo ? `\n${effectiveInstallmentInfo}` : ''
+    }`;
+  }
+
+  if (result.planType === 'increasingInstallment') {
+    return `Taksit artış oranı: %${result.installmentIncreaseRatePercent ?? 0}
+Artış sıklığı: ${result.installmentIncreaseFrequencyMonths ?? 12} ay
+İlk taksit: ${formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)}
+Son taksit: ${formatCurrency(result.lastInstallmentAmount ?? 0)}
+Toplam ödeme: ${formatCurrency(result.totalPayment)}
+Plan Tipi: ${PLAN_TYPE_LABELS.increasingInstallment}`;
   }
 
   if (result.planType === 'prepaidInterest') {
