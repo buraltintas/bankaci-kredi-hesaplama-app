@@ -458,6 +458,248 @@ describe('calculateLoan', () => {
     });
   });
 
+  describe('custom payment plan', () => {
+    const customPaymentBaseInput = {
+      creditUsageDate: new Date(2026, 5, 24),
+      firstInstallmentDate: new Date(2026, 6, 24),
+      planType: 'customPayment' as const,
+    };
+
+    it('solves automatic installments after the first three low custom payments', () => {
+      const result = calculateLoan({
+        ...customPaymentBaseInput,
+        principal: 120000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+        customPayments: [
+          { installmentNo: 1, amount: 8000 },
+          { installmentNo: 2, amount: 8000 },
+          { installmentNo: 3, amount: 8000 },
+        ],
+      });
+
+      expect(result.planType).toBe('customPayment');
+      expectCloseWithin(result.automaticInstallmentAmount ?? 0, 13665.37, 0.05);
+      expect(result.schedule).toHaveLength(12);
+      expect(result.schedule.some((item) => item.installmentNumber === 0)).toBe(false);
+      expect(result.schedule[0].interest).toBe(3600);
+      expect(result.schedule[0].principal).toBe(4400);
+      expect(result.schedule[1].interest).toBe(3468);
+      expect(result.schedule[1].principal).toBe(4532);
+      expect(result.schedule[2].interest).toBe(3332.04);
+      expect(result.schedule[2].principal).toBe(4667.96);
+      expectCloseWithin(result.schedule[11].installment, 13665.35, 0.1);
+      expectCloseWithin(result.totalInterest, 26988.31, 0.1);
+      expectCloseWithin(result.totalPayment, 146988.31, 0.1);
+      expect(result.schedule[11].remainingPrincipal).toBe(0);
+      expect(result.discountedMonthlyRate).toBeUndefined();
+      expect(result.monthlyPrincipalAmount).toBeUndefined();
+      expectResultTotalsToMatchSchedule(result);
+    });
+
+    it('solves a final balloon payment plan', () => {
+      const result = calculateLoan({
+        ...customPaymentBaseInput,
+        principal: 100000,
+        term: 12,
+        monthlyInterestRatePercent: 2,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+        customPayments: [{ installmentNo: 12, amount: 50000 }],
+      });
+
+      expectCloseWithin(result.automaticInstallmentAmount ?? 0, 6189.47, 0.05);
+      expect(result.schedule[0].interest).toBe(2000);
+      expectCloseWithin(result.schedule[0].principal, 4189.47, 0.05);
+      expectCloseWithin(result.schedule[11].interest, 980.39, 0.1);
+      expectCloseWithin(result.schedule[11].principal, 49019.61, 0.1);
+      expectCloseWithin(result.totalInterest, 18084.11, 0.1);
+      expectCloseWithin(result.totalPayment, 118084.17, 0.1);
+      expect(result.schedule[11].remainingPrincipal).toBe(0);
+      expectResultTotalsToMatchSchedule(result);
+    });
+
+    it('solves taxed custom payments for the first six installments', () => {
+      const result = calculateLoan({
+        ...customPaymentBaseInput,
+        principal: 500000,
+        term: 24,
+        monthlyInterestRatePercent: 4.2,
+        kkdfRatePercent: 15,
+        bsmvRatePercent: 15,
+        customPayments: Array.from({ length: 6 }, (_, index) => ({
+          installmentNo: index + 1,
+          amount: 40000,
+        })),
+      });
+
+      expectCloseWithin(result.automaticInstallmentAmount ?? 0, 36576.91, 0.1);
+      expect(result.schedule[0].interest).toBe(21000);
+      expect(result.schedule[0].kkdf).toBe(3150);
+      expect(result.schedule[0].bsmv).toBe(3150);
+      expect(result.schedule[0].principal).toBe(12700);
+      expectCloseWithin(result.schedule[5].principal, 16566.96, 0.1);
+      expectCloseWithin(result.schedule[6].installment, 36576.91, 0.1);
+      expectCloseWithin(result.schedule[23].installment, 36576.71, 0.2);
+      expectCloseWithin(result.totalInterest, 306449.38, 0.2);
+      expectCloseWithin(result.totalKkdf, 45967.4, 0.2);
+      expectCloseWithin(result.totalBsmv, 45967.4, 0.2);
+      expectCloseWithin(result.totalPayment, 898384.18, 0.2);
+      expect(result.schedule[23].remainingPrincipal).toBe(0);
+      expectResultTotalsToMatchSchedule(result);
+    });
+
+    it('solves an interim balloon payment plan', () => {
+      const result = calculateLoan({
+        ...customPaymentBaseInput,
+        principal: 300000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+        customPayments: [{ installmentNo: 6, amount: 100000 }],
+      });
+
+      expectCloseWithin(result.automaticInstallmentAmount ?? 0, 23720.85, 0.05);
+      expectCloseWithin(result.schedule[5].interest, 6655.35, 0.1);
+      expectCloseWithin(result.schedule[5].principal, 93344.65, 0.1);
+      expectCloseWithin(result.totalInterest, 60929.31, 0.1);
+      expectCloseWithin(result.totalPayment, 360929.31, 0.1);
+      expect(result.schedule[11].remainingPrincipal).toBe(0);
+      expectResultTotalsToMatchSchedule(result);
+    });
+
+    it('closes final cents after a first-installment custom payment', () => {
+      const result = calculateLoan({
+        ...customPaymentBaseInput,
+        principal: 100000,
+        term: 3,
+        monthlyInterestRatePercent: 2,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+        customPayments: [{ installmentNo: 1, amount: 40000 }],
+      });
+
+      expectCloseWithin(result.automaticInstallmentAmount ?? 0, 31933.07, 0.05);
+      expect(result.schedule[0].interest).toBe(2000);
+      expect(result.schedule[0].principal).toBe(38000);
+      expect(result.schedule[1].interest).toBe(1240);
+      expectCloseWithin(result.schedule[2].interest, 626.14, 0.05);
+      expectCloseWithin(result.totalInterest, 3866.14, 0.05);
+      expectCloseWithin(result.totalPayment, 103866.14, 0.05);
+      expect(result.schedule[2].remainingPrincipal).toBe(0);
+      expectResultTotalsToMatchSchedule(result);
+    });
+
+    it('applies broken period to the first custom-payment installment only', () => {
+      const regularResult = calculateLoan({
+        ...customPaymentBaseInput,
+        principal: 120000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+        customPayments: [{ installmentNo: 6, amount: 30000 }],
+      });
+      const brokenResult = calculateLoan({
+        ...customPaymentBaseInput,
+        principal: 120000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+        firstInstallmentDate: new Date(2026, 7, 7),
+        customPayments: [{ installmentNo: 6, amount: 30000 }],
+      });
+
+      expect(brokenResult.brokenPeriod.diffDays).toBeGreaterThan(0);
+      expect(brokenResult.schedule[0].interest).toBeGreaterThan(
+        regularResult.schedule[0].interest
+      );
+      expect(brokenResult.schedule[1].interest).toBeGreaterThan(
+        regularResult.schedule[1].interest
+      );
+      expect(brokenResult.schedule[11].remainingPrincipal).toBe(0);
+      expectResultTotalsToMatchSchedule(brokenResult);
+    });
+
+    it('rejects invalid custom payment inputs', () => {
+      const commonInput = {
+        ...customPaymentBaseInput,
+        principal: 100000,
+        term: 12,
+        monthlyInterestRatePercent: 2,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+      };
+
+      expect(() => calculateLoan(commonInput)).toThrow('en az bir özel taksit');
+      expect(() =>
+        calculateLoan({
+          ...commonInput,
+          customPayments: [{ installmentNo: 0, amount: 10000 }],
+        })
+      ).toThrow('1 ile vade arasında');
+      expect(() =>
+        calculateLoan({
+          ...commonInput,
+          customPayments: [{ installmentNo: 13, amount: 10000 }],
+        })
+      ).toThrow('1 ile vade arasında');
+      expect(() =>
+        calculateLoan({
+          ...commonInput,
+          customPayments: [
+            { installmentNo: 1, amount: 10000 },
+            { installmentNo: 1, amount: 12000 },
+          ],
+        })
+      ).toThrow('birden fazla');
+      expect(() =>
+        calculateLoan({
+          ...commonInput,
+          customPayments: [{ installmentNo: 1, amount: -10000 }],
+        })
+      ).toThrow('pozitif');
+      expect(() =>
+        calculateLoan({
+          ...commonInput,
+          customPayments: [{ installmentNo: 1, amount: 0 }],
+        })
+      ).toThrow('pozitif');
+      expect(() =>
+        calculateLoan({
+          ...customPaymentBaseInput,
+          principal: 500000,
+          term: 24,
+          monthlyInterestRatePercent: 4.2,
+          kkdfRatePercent: 15,
+          bsmvRatePercent: 15,
+          customPayments: [{ installmentNo: 1, amount: 20000 }],
+        })
+      ).toThrow('faiz ve vergi');
+      expect(() =>
+        calculateLoan({
+          ...commonInput,
+          customPayments: [{ installmentNo: 1, amount: 200000 }],
+        })
+      ).toThrow('negatife');
+      expect(() =>
+        calculateLoan({
+          ...commonInput,
+          term: 2,
+          monthlyInterestRatePercent: 0,
+          customPayments: [
+            { installmentNo: 1, amount: 40000 },
+            { installmentNo: 2, amount: 40000 },
+          ],
+        })
+      ).toThrow('vade sonunda');
+    });
+  });
+
   describe('prepaid interest validation matrix', () => {
     const cases = [
       {

@@ -1,4 +1,8 @@
-export type LoanPlanType = 'standard' | 'prepaidInterest' | 'equalPrincipal';
+export type LoanPlanType =
+  | 'standard'
+  | 'prepaidInterest'
+  | 'equalPrincipal'
+  | 'customPayment';
 
 export type LoanInput = {
   principal: number;
@@ -10,6 +14,10 @@ export type LoanInput = {
   firstInstallmentDate: Date;
   planType?: LoanPlanType;
   prepaidInterestAmount?: number;
+  customPayments?: Array<{
+    installmentNo: number;
+    amount: number;
+  }>;
 };
 
 export type PaymentScheduleItem = {
@@ -52,6 +60,7 @@ export type LoanCalculationResult = {
   monthlyPrincipalAmount?: number;
   firstInstallmentAmount?: number;
   lastInstallmentAmount?: number;
+  automaticInstallmentAmount?: number;
   infoMessages?: string[];
   warnings?: string[];
 };
