@@ -710,7 +710,10 @@ const buildCustomPaymentScheduleWithAmount = (
         ? customPaymentAmount
         : automaticInstallmentAmount;
 
-    if (installment <= carryingCost) {
+    if (
+      (isCustomPayment && installment < carryingCost) ||
+      (!isCustomPayment && installment <= carryingCost)
+    ) {
       throw new Error(
         isCustomPayment
           ? 'Özel taksit tutarı, ilgili dönemin faiz ve vergi tutarını karşılamalıdır.'
@@ -721,6 +724,10 @@ const buildCustomPaymentScheduleWithAmount = (
     let principal = isAdjustedFinalAutomatic
       ? roundToCents(remainingPrincipal)
       : roundToCents(installment - carryingCost);
+
+    if (isCustomPayment && Math.abs(principal) < 0.01) {
+      principal = 0;
+    }
 
     if (principal > remainingPrincipal + 0.01) {
       const overpaymentAmount = roundToCents(principal - remainingPrincipal);
@@ -782,7 +789,10 @@ const simulateCustomPaymentFinalRemaining = (
       ? customPaymentAmount
       : automaticInstallmentAmount;
 
-    if (installment <= carryingCost) {
+    if (
+      (isCustomPayment && installment < carryingCost) ||
+      (!isCustomPayment && installment <= carryingCost)
+    ) {
       if (isCustomPayment) {
         throw new Error(
           'Özel taksit tutarı, ilgili dönemin faiz ve vergi tutarını karşılamalıdır.'
@@ -792,7 +802,11 @@ const simulateCustomPaymentFinalRemaining = (
       return Number.POSITIVE_INFINITY;
     }
 
-    const principal = roundToCents(installment - carryingCost);
+    const calculatedPrincipal = roundToCents(installment - carryingCost);
+    const principal =
+      isCustomPayment && Math.abs(calculatedPrincipal) < 0.01
+        ? 0
+        : calculatedPrincipal;
 
     if (principal > remainingPrincipal + 0.01) {
       return Number.NEGATIVE_INFINITY;

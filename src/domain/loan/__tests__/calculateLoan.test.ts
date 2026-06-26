@@ -811,6 +811,44 @@ describe('calculateLoan', () => {
       expectResultTotalsToMatchSchedule(result);
     });
 
+    it('accepts custom payments that exactly cover interest without principal', () => {
+      const result = calculateLoan({
+        ...customPaymentBaseInput,
+        creditUsageDate: new Date(2026, 5, 23),
+        firstInstallmentDate: new Date(2026, 6, 23),
+        principal: 3000000,
+        term: 60,
+        monthlyInterestRatePercent: 3.1,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+        customPayments: [
+          { installmentNo: 1, amount: 93000 },
+          { installmentNo: 2, amount: 93000 },
+          { installmentNo: 3, amount: 93000 },
+          { installmentNo: 4, amount: 93000 },
+          { installmentNo: 5, amount: 93000 },
+          { installmentNo: 6, amount: 1000000 },
+        ],
+      });
+
+      result.schedule.slice(0, 5).forEach((item, index) => {
+        expect(item.installmentNumber).toBe(index + 1);
+        expect(item.principal).toBe(0);
+        expect(item.interest).toBe(93000);
+        expect(item.installment).toBe(93000);
+        expect(item.remainingPrincipal).toBe(3000000);
+      });
+      expect(result.schedule[5].interest).toBe(93000);
+      expect(result.schedule[5].principal).toBe(907000);
+      expect(result.schedule[5].installment).toBe(1000000);
+      expect(result.schedule[5].remainingPrincipal).toBe(2093000);
+      expectCloseWithin(result.automaticInstallmentAmount ?? 0, 80332.89, 0.1);
+      expectCloseWithin(result.schedule[6].installment, 80332.89, 0.1);
+      expect(result.schedule[59].remainingPrincipal).toBe(0);
+      expect(result.totalPrincipal).toBe(3000000);
+      expectResultTotalsToMatchSchedule(result);
+    });
+
     it('closes final cents after a first-installment custom payment', () => {
       const result = calculateLoan({
         ...customPaymentBaseInput,
@@ -909,6 +947,26 @@ describe('calculateLoan', () => {
           customPayments: [{ installmentNo: 1, amount: 0 }],
         })
       ).toThrow('pozitif');
+      expect(() =>
+        calculateLoan({
+          ...customPaymentBaseInput,
+          creditUsageDate: new Date(2026, 5, 23),
+          firstInstallmentDate: new Date(2026, 6, 23),
+          principal: 3000000,
+          term: 60,
+          monthlyInterestRatePercent: 3.1,
+          kkdfRatePercent: 0,
+          bsmvRatePercent: 0,
+          customPayments: [
+            { installmentNo: 1, amount: 92999.99 },
+            { installmentNo: 2, amount: 93000 },
+            { installmentNo: 3, amount: 93000 },
+            { installmentNo: 4, amount: 93000 },
+            { installmentNo: 5, amount: 93000 },
+            { installmentNo: 6, amount: 1000000 },
+          ],
+        })
+      ).toThrow('faiz ve vergi');
       expect(() =>
         calculateLoan({
           ...customPaymentBaseInput,
