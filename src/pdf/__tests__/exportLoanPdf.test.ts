@@ -1,5 +1,12 @@
-import { calculateLoan } from '../../domain/loan/calculateLoan';
+import { calculateLoan as calculateLoanEngine } from '../../domain/loan/calculateLoan';
+import type { LoanInput } from '../../domain/loan/types';
 import { createLoanPdfFileName } from '../exportLoanPdf';
+
+const calculateLoan = (input: LoanInput) =>
+  calculateLoanEngine({
+    deductFirstInstallmentDelayFromTerm: false,
+    ...input,
+  });
 
 describe('createLoanPdfFileName', () => {
   it('includes amount, term, dates and unique id', () => {

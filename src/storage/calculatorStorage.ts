@@ -15,11 +15,14 @@ export type LoanFormSnapshot = {
   term: string;
   creditUsageDate: Date;
   firstInstallmentDate: Date;
+  deductFirstInstallmentDelayFromTerm?: boolean;
   planType?: LoanPlanType;
   prepaidInterestAmount?: string;
   interestOnlyInstallmentCount?: string;
   installmentIncreaseRatePercent?: string;
   installmentIncreaseFrequencyMonths?: string;
+  installmentIncreaseStartNo?: string;
+  installmentIncreaseEndNo?: string;
   customPayments?: Array<{
     installmentNo: string;
     amount: string;
@@ -54,7 +57,13 @@ export type RecentCalculation = {
     postInterestOnlyInstallmentAmount?: number;
     installmentIncreaseRatePercent?: number;
     installmentIncreaseFrequencyMonths?: number;
+    installmentIncreaseStartNo?: number;
+    installmentIncreaseEndNo?: number;
     baseInstallmentAmount?: number;
+    deductFirstInstallmentDelayFromTerm?: boolean;
+    firstInstallmentDelayMonths?: number;
+    deductedDelayMonths?: number;
+    effectiveInstallmentCount?: number;
   };
 };
 
@@ -125,6 +134,8 @@ const deserializeForm = (
     term: String(form.term ?? ''),
     creditUsageDate,
     firstInstallmentDate,
+    deductFirstInstallmentDelayFromTerm:
+      form.deductFirstInstallmentDelayFromTerm === true,
     planType: normalizePlanType(form.planType),
     prepaidInterestAmount: String(form.prepaidInterestAmount ?? ''),
     interestOnlyInstallmentCount: String(form.interestOnlyInstallmentCount ?? ''),
@@ -134,6 +145,16 @@ const deserializeForm = (
     installmentIncreaseFrequencyMonths: String(
       form.installmentIncreaseFrequencyMonths ??
         (normalizePlanType(form.planType) === 'increasingInstallment' ? '12' : '')
+    ),
+    installmentIncreaseStartNo: String(
+      form.installmentIncreaseStartNo ??
+        (normalizePlanType(form.planType) === 'increasingInstallment' ? '1' : '')
+    ),
+    installmentIncreaseEndNo: String(
+      form.installmentIncreaseEndNo ??
+        (normalizePlanType(form.planType) === 'increasingInstallment'
+          ? form.term ?? ''
+          : '')
     ),
     customPayments: deserializeCustomPayments(form.customPayments),
   };
@@ -209,7 +230,26 @@ const deserializeRecentCalculation = (
         (normalizePlanType(item.summary.planType) === 'increasingInstallment'
           ? 12
           : 0),
+      installmentIncreaseStartNo:
+        Number(item.summary.installmentIncreaseStartNo) ||
+        (normalizePlanType(item.summary.planType) === 'increasingInstallment'
+          ? 1
+          : 0),
+      installmentIncreaseEndNo:
+        Number(item.summary.installmentIncreaseEndNo) ||
+        (normalizePlanType(item.summary.planType) === 'increasingInstallment'
+          ? Number(item.summary.term) || 0
+          : 0),
       baseInstallmentAmount: Number(item.summary.baseInstallmentAmount) || 0,
+      deductFirstInstallmentDelayFromTerm:
+        item.summary.deductFirstInstallmentDelayFromTerm === true,
+      firstInstallmentDelayMonths:
+        Number(item.summary.firstInstallmentDelayMonths) || 0,
+      deductedDelayMonths: Number(item.summary.deductedDelayMonths) || 0,
+      effectiveInstallmentCount:
+        Number(item.summary.effectiveInstallmentCount) ||
+        Number(item.summary.term) ||
+        0,
     },
   };
 };
@@ -242,6 +282,8 @@ const isSameFormSnapshot = (
   a.bsmv === b.bsmv &&
   a.kkdf === b.kkdf &&
   a.term === b.term &&
+  Boolean(a.deductFirstInstallmentDelayFromTerm) ===
+    Boolean(b.deductFirstInstallmentDelayFromTerm) &&
   (a.planType ?? 'standard') === (b.planType ?? 'standard') &&
   String(a.prepaidInterestAmount ?? '') ===
     String(b.prepaidInterestAmount ?? '') &&
@@ -251,6 +293,10 @@ const isSameFormSnapshot = (
     String(b.installmentIncreaseRatePercent ?? '') &&
   String(a.installmentIncreaseFrequencyMonths ?? '') ===
     String(b.installmentIncreaseFrequencyMonths ?? '') &&
+  String(a.installmentIncreaseStartNo ?? '') ===
+    String(b.installmentIncreaseStartNo ?? '') &&
+  String(a.installmentIncreaseEndNo ?? '') ===
+    String(b.installmentIncreaseEndNo ?? '') &&
   JSON.stringify(a.customPayments ?? []) ===
     JSON.stringify(b.customPayments ?? []) &&
   formatDateForFileName(a.creditUsageDate) ===
@@ -282,7 +328,14 @@ export const addRecentCalculation = async (
     installmentIncreaseRatePercent: result.installmentIncreaseRatePercent,
     installmentIncreaseFrequencyMonths:
       result.installmentIncreaseFrequencyMonths,
+    installmentIncreaseStartNo: result.installmentIncreaseStartNo,
+    installmentIncreaseEndNo: result.installmentIncreaseEndNo,
     baseInstallmentAmount: result.baseInstallmentAmount,
+    deductFirstInstallmentDelayFromTerm:
+      result.deductFirstInstallmentDelayFromTerm,
+    firstInstallmentDelayMonths: result.firstInstallmentDelayMonths,
+    deductedDelayMonths: result.deductedDelayMonths,
+    effectiveInstallmentCount: result.effectiveInstallmentCount,
   };
   const now = new Date().toISOString();
 

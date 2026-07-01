@@ -31,6 +31,10 @@ export const buildCustomPaymentsFromRows = (
       throw new Error('Özel ödeme taksit no ve tutarı pozitif olmalıdır.');
     }
 
+    if (/[,.]/.test(row.installmentNo)) {
+      throw new Error('Özel ödeme taksit no pozitif tam sayı olmalıdır.');
+    }
+
     const installmentNo = parseNumericInput(row.installmentNo, 'integer');
     const amount = parseNumericInput(row.amount, 'money');
 

@@ -25,6 +25,9 @@ describe('customPaymentForm', () => {
       buildCustomPaymentsFromRows([{ installmentNo: '13', amount: '10.000' }], 12)
     ).toThrow('1 ile vade');
     expect(() =>
+      buildCustomPaymentsFromRows([{ installmentNo: '1,5', amount: '10.000' }], 12)
+    ).toThrow('tam sayı');
+    expect(() =>
       buildCustomPaymentsFromRows(
         [
           { installmentNo: '1', amount: '10.000' },

@@ -10,8 +10,11 @@ export const getFirstIncreasedInstallmentAmount = (
   }
 
   const frequencyMonths = result.installmentIncreaseFrequencyMonths ?? 12;
+  const startNo = result.installmentIncreaseStartNo ?? 1;
+  const firstIncreaseInstallmentNo = startNo + frequencyMonths;
+
   return (
-    result.schedule[frequencyMonths]?.installment ??
+    result.schedule[firstIncreaseInstallmentNo - 1]?.installment ??
     result.lastInstallmentAmount ??
     result.firstInstallmentAmount ??
     result.firstInstallment

@@ -64,6 +64,8 @@ Plan Tipi: ${PLAN_TYPE_LABELS.interestOnly}${
   if (result.planType === 'increasingInstallment') {
     return `Taksit artış oranı: %${result.installmentIncreaseRatePercent ?? 0}
 Artış sıklığı: ${result.installmentIncreaseFrequencyMonths ?? 12} ay
+Artış başlangıç taksiti: ${result.installmentIncreaseStartNo ?? 1}. taksit
+Artış bitiş taksiti: ${result.installmentIncreaseEndNo ?? result.input.term}. taksit
 İlk taksit: ${formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)}
 Son taksit: ${formatCurrency(result.lastInstallmentAmount ?? 0)}
 Toplam ödeme: ${formatCurrency(result.totalPayment)}
@@ -90,6 +92,9 @@ export const buildLoanShareMessage = (result: LoanCalculationResult): string => 
     result.brokenPeriod.diffDays !== 0
       ? '\nİlk taksit tarihine bağlı kırık dönem farkı sadece 1. taksite yansıtılmıştır.'
       : '';
+  const infoMessagesNote = result.infoMessages?.length
+    ? `\n${result.infoMessages.join('\n')}`
+    : '';
 
   return `Kredi kullanım tarihi: ${formatDate(result.input.creditUsageDate)}
 İlk taksit tarihi: ${formatDate(result.input.firstInstallmentDate)}
@@ -97,5 +102,5 @@ Kredi tutarı: ${formatCurrency(result.input.principal)}
 Vade: ${result.input.term} ay
 Faiz: %${result.input.monthlyInterestRatePercent}
 KKDF: %${result.input.kkdfRatePercent} | BSMV: %${result.input.bsmvRatePercent}
-${buildPlanSpecificLines(result)}${brokenPeriodNote}`;
+${buildPlanSpecificLines(result)}${infoMessagesNote}${brokenPeriodNote}`;
 };

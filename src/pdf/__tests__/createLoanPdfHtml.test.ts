@@ -1,5 +1,12 @@
-import { calculateLoan } from '../../domain/loan/calculateLoan';
+import { calculateLoan as calculateLoanEngine } from '../../domain/loan/calculateLoan';
+import type { LoanInput } from '../../domain/loan/types';
 import { createLoanPdfHtml } from '../createLoanPdfHtml';
+
+const calculateLoan = (input: LoanInput) =>
+  calculateLoanEngine({
+    deductFirstInstallmentDelayFromTerm: false,
+    ...input,
+  });
 
 const formatCurrency = (value: number) =>
   value.toLocaleString('tr-TR', {
@@ -126,18 +133,17 @@ describe('createLoanPdfHtml', () => {
       planType: 'customPayment',
       customPayments: [
         { installmentNo: 1, amount: 10000 },
-        { installmentNo: 10, amount: 50000 },
+        { installmentNo: 12, amount: 50000 },
       ],
     });
     const html = createLoanPdfHtml(result);
 
     expect(html).toContain('Özel / Balon Ödeme Planı');
-    expect(html).toContain('Otomatik taksit');
-    expect(html).toContain(formatCurrency(result.automaticInstallmentAmount ?? 0));
+    expect(html).not.toContain('Otomatik taksit');
     expect(html).toContain('Özel ödeme sayısı');
     expect(html).toContain('Özel Ödemeler:');
     expect(html).toContain('1. taksit: 10.000,00 TL');
-    expect(html).toContain('10. taksit: 50.000,00 TL');
+    expect(html).toContain('12. taksit: 50.000,00 TL');
   });
 
   it('renders interest-only plan details and labels interest-only rows', () => {
@@ -205,6 +211,97 @@ describe('createLoanPdfHtml', () => {
     expect(html).not.toContain('toplam vade aşılmaması');
   });
 
+  it('renders first installment delay deduction info when enabled', () => {
+    const result = calculateLoanEngine({
+      principal: 100000,
+      term: 24,
+      monthlyInterestRatePercent: 3,
+      kkdfRatePercent: 0,
+      bsmvRatePercent: 0,
+      creditUsageDate: new Date(2026, 5, 25),
+      firstInstallmentDate: new Date(2026, 8, 25),
+      deductFirstInstallmentDelayFromTerm: true,
+      planType: 'standard',
+    });
+    const html = createLoanPdfHtml(result);
+
+    expect(result.schedule).toHaveLength(22);
+    expect(html).toContain('Taksit sayısı bilgilendirmesi');
+    expect(html).toContain('Girilen vade: 24 ay');
+    expect(html).toContain('İlk taksit ertelemesi: 2 ay');
+    expect(html).toContain('Ödeme planı taksit sayısı: 22');
+  });
+
+  it('renders only the extra delay month for a two-month first installment start', () => {
+    const result = calculateLoanEngine({
+      principal: 250000,
+      term: 12,
+      monthlyInterestRatePercent: 4.1,
+      kkdfRatePercent: 15,
+      bsmvRatePercent: 15,
+      creditUsageDate: new Date(2026, 6, 1),
+      firstInstallmentDate: new Date(2026, 8, 1),
+      deductFirstInstallmentDelayFromTerm: true,
+      planType: 'standard',
+    });
+    const html = createLoanPdfHtml(result);
+
+    expect(result.firstInstallmentDelayMonths).toBe(2);
+    expect(result.deductedDelayMonths).toBe(1);
+    expect(result.schedule).toHaveLength(11);
+    expect(html).toContain('İlk taksit ertelemesi: 1 ay');
+    expect(html).toContain('Ödeme planı taksit sayısı: 11');
+    expect(html).not.toContain('İlk taksit ertelemesi: 2 ay');
+    expect(html).not.toContain('Ödeme planı taksit sayısı: 10');
+  });
+
+  it('does not render delay deduction info for a normal one-month increasing installment start', () => {
+    const result = calculateLoanEngine({
+      principal: 3000000,
+      term: 60,
+      monthlyInterestRatePercent: 3.1,
+      kkdfRatePercent: 0,
+      bsmvRatePercent: 0,
+      creditUsageDate: new Date(2026, 6, 1),
+      firstInstallmentDate: new Date(2026, 7, 1),
+      deductFirstInstallmentDelayFromTerm: true,
+      planType: 'increasingInstallment',
+      installmentIncreaseRatePercent: 5,
+      installmentIncreaseFrequencyMonths: 12,
+      installmentIncreaseStartNo: 1,
+      installmentIncreaseEndNo: 36,
+    });
+    const html = createLoanPdfHtml(result);
+
+    expect(result.firstInstallmentDelayMonths).toBe(1);
+    expect(result.deductedDelayMonths).toBe(0);
+    expect(result.effectiveInstallmentCount).toBe(60);
+    expect(result.schedule).toHaveLength(60);
+    expect(result.schedule[59].remainingPrincipal).toBe(0);
+    expect(html).not.toContain('İlk taksit ertelemesi: 1 ay');
+    expect(html).not.toContain('Ödeme planı taksit sayısı: 59');
+  });
+
+  it('does not render delay deduction info for a 33-day normal first installment start', () => {
+    const result = calculateLoanEngine({
+      principal: 100000,
+      term: 24,
+      monthlyInterestRatePercent: 3,
+      kkdfRatePercent: 0,
+      bsmvRatePercent: 0,
+      creditUsageDate: new Date(2026, 6, 1),
+      firstInstallmentDate: new Date(2026, 7, 3),
+      deductFirstInstallmentDelayFromTerm: true,
+      planType: 'standard',
+    });
+    const html = createLoanPdfHtml(result);
+
+    expect(result.deductedDelayMonths).toBe(0);
+    expect(result.schedule).toHaveLength(24);
+    expect(html).not.toContain('İlk taksit ertelemesi');
+    expect(html).not.toContain('Ödeme planı taksit sayısı');
+  });
+
   it('renders increasing installment plan details without standard installment wording', () => {
     const result = calculateLoan({
       principal: 100000,
@@ -217,6 +314,8 @@ describe('createLoanPdfHtml', () => {
       planType: 'increasingInstallment',
       installmentIncreaseRatePercent: 5,
       installmentIncreaseFrequencyMonths: 12,
+      installmentIncreaseStartNo: 1,
+      installmentIncreaseEndNo: 12,
     });
     const html = createLoanPdfHtml(result);
 
@@ -225,6 +324,10 @@ describe('createLoanPdfHtml', () => {
     expect(html).toContain('%5');
     expect(html).toContain('Artış Sıklığı');
     expect(html).toContain('12 ay');
+    expect(html).toContain('Artış Başlangıç Taksiti');
+    expect(html).toContain('1. taksit');
+    expect(html).toContain('Artış Bitiş Taksiti');
+    expect(html).toContain('12. taksit');
     expect(html).toContain('İlk Taksit');
     expect(html).toContain(formatCurrency(result.firstInstallmentAmount ?? 0));
     expect(html).toContain('İlk Artış Sonrası Taksit');

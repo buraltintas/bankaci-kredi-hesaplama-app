@@ -26,6 +26,7 @@ import {
   buildCustomPaymentsFromRows,
 } from '../src/domain/loan/customPaymentForm';
 import {
+  parseInstallmentIncreaseBoundary,
   parseInstallmentIncreaseFrequencyMonths,
   parseInstallmentIncreaseRatePercent,
 } from '../src/domain/loan/increasingInstallmentForm';
@@ -90,11 +91,18 @@ const LoanCalculator = () => {
     installmentIncreaseFrequencyMonths,
     setInstallmentIncreaseFrequencyMonths,
   ] = useState('12');
+  const [installmentIncreaseStartNo, setInstallmentIncreaseStartNo] =
+    useState('1');
+  const [installmentIncreaseEndNo, setInstallmentIncreaseEndNo] = useState('');
   const [customPaymentRows, setCustomPaymentRows] = useState([
     createCustomPaymentRow(),
   ]);
   const [creditUsageDate, setCreditUsageDate] = useState(today);
   const [firstInstallmentDate, setFirstInstallmentDate] = useState(addMonths(today, 1));
+  const [
+    deductFirstInstallmentDelayFromTerm,
+    setDeductFirstInstallmentDelayFromTerm,
+  ] = useState(true);
   const [activeDatePicker, setActiveDatePicker] = useState(null);
   const [includeContactInfo, setIncludeContactInfo] = useState(false);
   const [contactFullName, setContactFullName] = useState('');
@@ -209,12 +217,15 @@ const LoanCalculator = () => {
     interestOnlyInstallmentCount,
     installmentIncreaseRatePercent,
     installmentIncreaseFrequencyMonths,
+    installmentIncreaseStartNo: installmentIncreaseStartNo || '1',
+    installmentIncreaseEndNo: installmentIncreaseEndNo || term,
     customPayments: customPaymentRows.map(({ installmentNo, amount }) => ({
       installmentNo,
       amount,
     })),
     creditUsageDate,
     firstInstallmentDate,
+    deductFirstInstallmentDelayFromTerm,
   });
 
   const applyFormSnapshot = (formSnapshot) => {
@@ -235,6 +246,10 @@ const LoanCalculator = () => {
     setInstallmentIncreaseFrequencyMonths(
       formSnapshot.installmentIncreaseFrequencyMonths ?? '12'
     );
+    setInstallmentIncreaseStartNo(
+      formSnapshot.installmentIncreaseStartNo ?? '1'
+    );
+    setInstallmentIncreaseEndNo(formSnapshot.installmentIncreaseEndNo ?? formSnapshot.term);
     setCustomPaymentRows(
       formSnapshot.customPayments?.length
         ? formSnapshot.customPayments.map((payment) => ({
@@ -246,6 +261,9 @@ const LoanCalculator = () => {
     );
     setCreditUsageDate(formSnapshot.creditUsageDate);
     setFirstInstallmentDate(formSnapshot.firstInstallmentDate);
+    setDeductFirstInstallmentDelayFromTerm(
+      formSnapshot.deductFirstInstallmentDelayFromTerm === true
+    );
     setActiveDatePicker(null);
     setFormError('');
   };
@@ -338,6 +356,29 @@ const LoanCalculator = () => {
             termCount.value
           )
         : undefined;
+    const parsedInstallmentIncreaseStartNo =
+      planType === 'increasingInstallment'
+        ? parseInstallmentIncreaseBoundary(
+            installmentIncreaseStartNo,
+            termCount.value,
+            'başlangıç'
+          )
+        : undefined;
+    const parsedInstallmentIncreaseEndNo =
+      planType === 'increasingInstallment'
+        ? parseInstallmentIncreaseBoundary(
+            installmentIncreaseEndNo || String(termCount.value),
+            termCount.value,
+            'bitiş'
+          )
+        : undefined;
+
+    if (
+      planType === 'increasingInstallment' &&
+      parsedInstallmentIncreaseStartNo > parsedInstallmentIncreaseEndNo
+    ) {
+      throw new Error('Artış başlangıç taksiti bitiş taksitinden büyük olamaz.');
+    }
     const customPayments =
       planType === 'customPayment'
         ? buildCustomPaymentsFromRows(
@@ -357,6 +398,7 @@ const LoanCalculator = () => {
       bsmvRatePercent: bsmvRate.value,
       creditUsageDate,
       firstInstallmentDate,
+      deductFirstInstallmentDelayFromTerm,
       planType,
       prepaidInterestAmount:
         planType === 'prepaidInterest' ? prepaidInterest.value : undefined,
@@ -364,6 +406,8 @@ const LoanCalculator = () => {
       installmentIncreaseRatePercent: parsedInstallmentIncreaseRatePercent,
       installmentIncreaseFrequencyMonths:
         parsedInstallmentIncreaseFrequencyMonths,
+      installmentIncreaseStartNo: parsedInstallmentIncreaseStartNo,
+      installmentIncreaseEndNo: parsedInstallmentIncreaseEndNo,
       customPayments,
     };
   };
@@ -402,6 +446,23 @@ const LoanCalculator = () => {
             recentCalculation.summary.term
           )
         : undefined;
+    const installmentIncreaseStartNo =
+      recentPlanType === 'increasingInstallment'
+        ? parseInstallmentIncreaseBoundary(
+            recentCalculation.form.installmentIncreaseStartNo ?? '1',
+            recentCalculation.summary.term,
+            'başlangıç'
+          )
+        : undefined;
+    const installmentIncreaseEndNo =
+      recentPlanType === 'increasingInstallment'
+        ? parseInstallmentIncreaseBoundary(
+            recentCalculation.form.installmentIncreaseEndNo ??
+              String(recentCalculation.summary.term),
+            recentCalculation.summary.term,
+            'bitiş'
+          )
+        : undefined;
 
     return {
       principal: recentCalculation.summary.principal,
@@ -413,6 +474,8 @@ const LoanCalculator = () => {
       bsmvRatePercent: Number(recentCalculation.form.bsmv.replace(',', '.')),
       creditUsageDate: recentCalculation.form.creditUsageDate,
       firstInstallmentDate: recentCalculation.form.firstInstallmentDate,
+      deductFirstInstallmentDelayFromTerm:
+        recentCalculation.form.deductFirstInstallmentDelayFromTerm === true,
       planType: recentPlanType,
       prepaidInterestAmount:
         recentPlanType === 'prepaidInterest' && prepaidInterest.isValid
@@ -421,6 +484,8 @@ const LoanCalculator = () => {
       interestOnlyInstallmentCount,
       installmentIncreaseRatePercent,
       installmentIncreaseFrequencyMonths,
+      installmentIncreaseStartNo,
+      installmentIncreaseEndNo,
       customPayments,
     };
   };
@@ -443,6 +508,16 @@ const LoanCalculator = () => {
     setInstallmentIncreaseFrequencyMonths(
       sanitizeNumericInput(value, 'integer')
     );
+    clearResult();
+  };
+
+  const handleInstallmentIncreaseStartNoChange = (value) => {
+    setInstallmentIncreaseStartNo(sanitizeNumericInput(value, 'integer'));
+    clearResult();
+  };
+
+  const handleInstallmentIncreaseEndNoChange = (value) => {
+    setInstallmentIncreaseEndNo(sanitizeNumericInput(value, 'integer'));
     clearResult();
   };
 
@@ -699,7 +774,15 @@ const LoanCalculator = () => {
         recentCalculation.form.installmentIncreaseFrequencyMonths ??
         recentCalculation.summary.installmentIncreaseFrequencyMonths ??
         12
-      } ayda bir`;
+      } ayda bir · ${
+        recentCalculation.form.installmentIncreaseStartNo ??
+        recentCalculation.summary.installmentIncreaseStartNo ??
+        1
+      }-${
+        recentCalculation.form.installmentIncreaseEndNo ??
+        recentCalculation.summary.installmentIncreaseEndNo ??
+        recentCalculation.summary.term
+      }. taksit`;
     }
 
     return '';
@@ -791,11 +874,14 @@ const LoanCalculator = () => {
             <NumericInput
               label="Vade (Ay)"
               mode="integer"
-              value={term}
-              onChangeText={(value) => {
-                setTerm(value);
-                clearResult();
-              }}
+	              value={term}
+	              onChangeText={(value) => {
+	                setTerm(value);
+	                if (planType === 'increasingInstallment' && !installmentIncreaseEndNo) {
+	                  setInstallmentIncreaseEndNo(value);
+	                }
+	                clearResult();
+	              }}
               placeholder="Örn. 12"
             />
             <NumericInput
@@ -840,13 +926,17 @@ const LoanCalculator = () => {
                       styles.planTypeOption,
                       isSelected && styles.planTypeOptionSelected,
                     ]}
-                    onPress={() => {
-                      setPlanType(type);
-                      if (type === 'customPayment' && customPaymentRows.length === 0) {
-                        setCustomPaymentRows([createCustomPaymentRow()]);
+	                    onPress={() => {
+	                      setPlanType(type);
+	                      if (type === 'customPayment' && customPaymentRows.length === 0) {
+	                        setCustomPaymentRows([createCustomPaymentRow()]);
+	                      }
+                      if (type === 'increasingInstallment') {
+                        setInstallmentIncreaseStartNo((currentValue) => currentValue || '1');
+                        setInstallmentIncreaseEndNo((currentValue) => currentValue || term);
                       }
-                      clearResult();
-                    }}
+	                      clearResult();
+	                    }}
                   >
                     <Text
                       style={[
@@ -907,6 +997,26 @@ const LoanCalculator = () => {
                   value={installmentIncreaseFrequencyMonths}
                   onChangeText={handleInstallmentIncreaseFrequencyChange}
                   placeholder="Örn. 12"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  returnKeyType="done"
+                />
+                <Text style={styles.label}>Artış Aralığı Başlangıcı</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={installmentIncreaseStartNo}
+                  onChangeText={handleInstallmentIncreaseStartNoChange}
+                  placeholder="Örn. 1"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  returnKeyType="done"
+                />
+                <Text style={styles.label}>Artış Aralığı Bitişi</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={installmentIncreaseEndNo}
+                  onChangeText={handleInstallmentIncreaseEndNoChange}
+                  placeholder="Örn. vade"
                   placeholderTextColor={colors.textMuted}
                   keyboardType="number-pad"
                   returnKeyType="done"
@@ -995,6 +1105,30 @@ const LoanCalculator = () => {
                 {formatDate(firstInstallmentDate)}
               </Text>
               <Feather name="calendar" size={20} color={colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.contactToggle}
+              onPress={() => {
+                setDeductFirstInstallmentDelayFromTerm((value) => !value);
+                clearResult();
+              }}
+            >
+              <View style={styles.contactToggleTextWrapper}>
+                <Text style={styles.label}>İlk taksit ertelemesini vadeden düş</Text>
+                <Text style={styles.helperText}>
+                  Açıksa, ilk taksit kullanım tarihinden kaç ay sonra başlıyorsa bu süre toplam vadeden düşülür.
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.checkbox,
+                  deductFirstInstallmentDelayFromTerm && styles.checkboxSelected,
+                ]}
+              >
+                {deductFirstInstallmentDelayFromTerm ? (
+                  <Feather name="check" size={18} color={colors.surface} />
+                ) : null}
+              </View>
             </TouchableOpacity>
             {activeDatePicker && Platform.OS === 'android' ? (
               <DateTimePicker

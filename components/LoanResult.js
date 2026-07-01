@@ -105,9 +105,11 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
   const heroSubValue = isCustomPayment
     ? `${result.input.customPayments?.length ?? 0} özel ödeme`
     : isIncreasingInstallment
-    ? `Taksitler her ${
-        result.installmentIncreaseFrequencyMonths ?? 12
-      } ayda bir %${result.installmentIncreaseRatePercent ?? 0} oranında artar`
+	    ? `Taksitler her ${
+	        result.installmentIncreaseFrequencyMonths ?? 12
+	      } ayda bir %${result.installmentIncreaseRatePercent ?? 0} oranında artar · ${
+	        result.installmentIncreaseStartNo ?? 1
+	      }-${result.installmentIncreaseEndNo ?? result.input.term}. taksit`
     : isInterestOnly
     ? `${result.interestOnlyInstallmentCount ?? 0} anapara ödemesiz taksit · İlk taksit ${formatCurrency(
         result.firstInstallment
@@ -230,6 +232,14 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
                   value={`${result.installmentIncreaseFrequencyMonths ?? 12} ay`}
                 />
                 <SummaryMetric
+                  label="Artış Başlangıç Taksiti"
+                  value={`${result.installmentIncreaseStartNo ?? 1}. taksit`}
+                />
+                <SummaryMetric
+                  label="Artış Bitiş Taksiti"
+                  value={`${result.installmentIncreaseEndNo ?? result.input.term}. taksit`}
+                />
+                <SummaryMetric
                   label="İlk Taksit"
                   value={formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)}
                 />
@@ -290,6 +300,16 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
             </View>
           ) : null}
 
+          {result.infoMessages?.map((message) => (
+            <View style={styles.brokenBox} key={message}>
+              <Feather name="info" size={18} color={colors.warning} />
+              <View style={styles.brokenTextWrapper}>
+                <Text style={styles.brokenTitle}>Taksit sayısı bilgilendirmesi</Text>
+                <Text style={styles.brokenText}>{message}</Text>
+              </View>
+            </View>
+          ))}
+
           {isCustomPayment && result.input.customPayments?.length ? (
             <View style={styles.customPaymentSummary}>
               <Text style={styles.customPaymentTitle}>Özel Ödemeler</Text>
@@ -339,11 +359,13 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
                       result.interestOnlyInstallmentCount ?? 0
                     } anapara ödemesiz`
                 : isIncreasingInstallment
-                  ? `${result.schedule.length} taksit · %${
-                      result.installmentIncreaseRatePercent ?? 0
-                    } artış · ${
-                      result.installmentIncreaseFrequencyMonths ?? 12
-                    } ayda bir`
+	                  ? `${result.schedule.length} taksit · %${
+	                      result.installmentIncreaseRatePercent ?? 0
+	                    } artış · ${
+	                      result.installmentIncreaseFrequencyMonths ?? 12
+	                    } ayda bir · ${
+	                      result.installmentIncreaseStartNo ?? 1
+	                    }-${result.installmentIncreaseEndNo ?? result.input.term}. taksit`
                 : isEqualPrincipal
                   ? `${result.schedule.length} azalan taksit detaylı ödeme planı`
                 : `${result.schedule.length} taksit detaylı amortisman tablosu`}

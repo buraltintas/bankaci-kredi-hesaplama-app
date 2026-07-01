@@ -11,6 +11,7 @@ import type {
 const DISCOUNTED_RATE_DISPLAY_DECIMALS = 3;
 const CUSTOM_PAYMENT_MAX_ITERATIONS = 80;
 const INCREASING_INSTALLMENT_MAX_ITERATIONS = 100;
+const NORMAL_FIRST_INSTALLMENT_GRACE_DAYS = 3;
 
 type CustomPaymentMap = Map<number, number>;
 
@@ -154,16 +155,26 @@ const buildStandardSchedule = (
     const calculatedPrincipal = roundToCents(
       standardInstallment - interest - kkdf - bsmv
     );
-    const principal = isLastInstallment
+    let principal = isLastInstallment
       ? roundToCents(remainingPrincipal)
       : calculatedPrincipal;
-    const installment = isLastInstallment
-      ? roundToCents(principal + interest + kkdf + bsmv)
-      : standardInstallment;
+
+    if (principal > remainingPrincipal) {
+      principal = roundToCents(remainingPrincipal);
+    }
+
+    if (principal < 0 && Math.abs(principal) <= 0.01) {
+      principal = 0;
+    }
+
+    const installment =
+      isLastInstallment || principal !== calculatedPrincipal
+        ? roundToCents(principal + interest + kkdf + bsmv)
+        : standardInstallment;
 
     remainingPrincipal = roundToCents(remainingPrincipal - principal);
 
-    if (isLastInstallment || Math.abs(remainingPrincipal) < 0.01) {
+    if (isLastInstallment || Math.abs(remainingPrincipal) <= 0.01) {
       remainingPrincipal = 0;
     }
 
@@ -192,9 +203,18 @@ const buildEqualPrincipalSchedule = (
   return Array.from({ length: input.term }, (_, index) => {
     const installmentNumber = index + 1;
     const isLastInstallment = installmentNumber === input.term;
-    const principal = isLastInstallment
+    let principal = isLastInstallment
       ? roundToCents(remainingPrincipal)
       : monthlyPrincipalAmount;
+
+    if (principal > remainingPrincipal) {
+      principal = roundToCents(remainingPrincipal);
+    }
+
+    if (principal < 0 && Math.abs(principal) <= 0.01) {
+      principal = 0;
+    }
+
     const interest = roundToCents(remainingPrincipal * monthlyInterestRate);
     const kkdf = roundToCents(interest * kkdfRate);
     const bsmv = roundToCents(interest * bsmvRate);
@@ -202,7 +222,7 @@ const buildEqualPrincipalSchedule = (
 
     remainingPrincipal = roundToCents(remainingPrincipal - principal);
 
-    if (isLastInstallment || Math.abs(remainingPrincipal) < 0.01) {
+    if (isLastInstallment || Math.abs(remainingPrincipal) <= 0.01) {
       remainingPrincipal = 0;
     }
 
@@ -290,6 +310,60 @@ const buildInterestOnlySchedule = (
 const isValidDate = (date: Date): boolean =>
   date instanceof Date && !Number.isNaN(date.getTime());
 
+const calculateFullMonthDelay = (
+  creditUsageDate: Date,
+  firstInstallmentDate: Date
+): number => {
+  let monthDifference =
+    (firstInstallmentDate.getFullYear() - creditUsageDate.getFullYear()) * 12 +
+    (firstInstallmentDate.getMonth() - creditUsageDate.getMonth());
+
+  if (monthDifference < 0) {
+    return monthDifference;
+  }
+
+  while (
+    monthDifference > 0 &&
+    addMonths(creditUsageDate, monthDifference).getTime() >
+      firstInstallmentDate.getTime()
+  ) {
+    monthDifference -= 1;
+  }
+
+  while (
+    addMonths(creditUsageDate, monthDifference + 1).getTime() <=
+    firstInstallmentDate.getTime()
+  ) {
+    monthDifference += 1;
+  }
+
+  return monthDifference;
+};
+
+const addDays = (date: Date, days: number): Date =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+
+const isNormalFirstInstallmentStart = (
+  creditUsageDate: Date,
+  firstInstallmentDate: Date
+): boolean => {
+  const normalFirstInstallmentLatestDate = addDays(
+    addMonths(creditUsageDate, 1),
+    NORMAL_FIRST_INSTALLMENT_GRACE_DAYS
+  );
+
+  return firstInstallmentDate.getTime() <= normalFirstInstallmentLatestDate.getTime();
+};
+
+const buildFirstInstallmentDelayInfo = (
+  originalTerm: number,
+  deductedDelayMonths: number,
+  effectiveInstallmentCount: number
+): string =>
+  `Girilen vade: ${originalTerm} ay
+İlk taksit ertelemesi: ${deductedDelayMonths} ay
+Ödeme planı taksit sayısı: ${effectiveInstallmentCount}`;
+
 const calculateInterestOnlyEffectiveInstallmentCount = (
   input: LoanInput
 ): number => {
@@ -318,20 +392,37 @@ const calculateInterestOnlyEffectiveInstallmentCount = (
 
 const getIncreasingInstallmentPeriodIndex = (
   installmentNumber: number,
-  frequencyMonths: number
-): number => Math.floor((installmentNumber - 1) / frequencyMonths);
+  frequencyMonths: number,
+  startNo: number,
+  endNo: number
+): number => {
+  if (installmentNumber < startNo) {
+    return 0;
+  }
+
+  const cappedInstallmentNumber = Math.min(installmentNumber, endNo);
+
+  return Math.floor((cappedInstallmentNumber - startNo) / frequencyMonths);
+};
 
 const calculateIncreasingInstallmentAmount = (
   baseInstallmentAmount: number,
   increaseRate: number,
   installmentNumber: number,
-  frequencyMonths: number
+  frequencyMonths: number,
+  startNo: number,
+  endNo: number
 ): number =>
   roundToCents(
     baseInstallmentAmount *
       Math.pow(
         1 + increaseRate,
-        getIncreasingInstallmentPeriodIndex(installmentNumber, frequencyMonths)
+        getIncreasingInstallmentPeriodIndex(
+          installmentNumber,
+          frequencyMonths,
+          startNo,
+          endNo
+        )
       )
   );
 
@@ -343,6 +434,8 @@ const simulateIncreasingInstallmentFinalRemaining = (
   brokenPeriod: BrokenPeriodInfo,
   increaseRate: number,
   frequencyMonths: number,
+  startNo: number,
+  endNo: number,
   baseInstallmentAmount: number
 ): number => {
   let remainingPrincipal = input.principal;
@@ -354,7 +447,9 @@ const simulateIncreasingInstallmentFinalRemaining = (
       baseInstallmentAmount,
       increaseRate,
       installmentNumber,
-      frequencyMonths
+      frequencyMonths,
+      startNo,
+      endNo
     );
     const interest = roundToCents(
       remainingPrincipal * monthlyInterestRate +
@@ -404,6 +499,8 @@ const resolveIncreasingBaseInstallment = (
   brokenPeriod: BrokenPeriodInfo,
   increaseRate: number,
   frequencyMonths: number,
+  startNo: number,
+  endNo: number,
   standardInstallment: number
 ): IncreasingInstallmentSolveResult => {
   let low = 0.01;
@@ -416,6 +513,8 @@ const resolveIncreasingBaseInstallment = (
     brokenPeriod,
     increaseRate,
     frequencyMonths,
+    startNo,
+    endNo,
     high
   );
   let guard = 0;
@@ -433,6 +532,8 @@ const resolveIncreasingBaseInstallment = (
       brokenPeriod,
       increaseRate,
       frequencyMonths,
+      startNo,
+      endNo,
       high
     );
     guard += 1;
@@ -456,6 +557,8 @@ const resolveIncreasingBaseInstallment = (
       brokenPeriod,
       increaseRate,
       frequencyMonths,
+      startNo,
+      endNo,
       middle
     );
 
@@ -475,6 +578,8 @@ const resolveIncreasingBaseInstallment = (
     brokenPeriod,
     increaseRate,
     frequencyMonths,
+    startNo,
+    endNo,
     candidateInstallment
   );
 
@@ -496,6 +601,8 @@ const calculateMaximumIncreasingRatePercent = (
   bsmvRate: number,
   brokenPeriod: BrokenPeriodInfo,
   frequencyMonths: number,
+  startNo: number,
+  endNo: number,
   standardInstallment: number
 ): number | null => {
   const isValidRate = (increaseRatePercent: number): boolean =>
@@ -507,6 +614,8 @@ const calculateMaximumIncreasingRatePercent = (
       brokenPeriod,
       increaseRatePercent / 100,
       frequencyMonths,
+      startNo,
+      endNo,
       standardInstallment
     ).status === 'valid';
 
@@ -560,6 +669,8 @@ const solveIncreasingBaseInstallment = (
   brokenPeriod: BrokenPeriodInfo,
   increaseRate: number,
   frequencyMonths: number,
+  startNo: number,
+  endNo: number,
   standardInstallment: number
 ): number => {
   const result = resolveIncreasingBaseInstallment(
@@ -570,6 +681,8 @@ const solveIncreasingBaseInstallment = (
     brokenPeriod,
     increaseRate,
     frequencyMonths,
+    startNo,
+    endNo,
     standardInstallment
   );
 
@@ -585,6 +698,8 @@ const solveIncreasingBaseInstallment = (
         bsmvRate,
         brokenPeriod,
         frequencyMonths,
+        startNo,
+        endNo,
         standardInstallment
       )
   );
@@ -614,6 +729,8 @@ const buildIncreasingInstallmentSchedule = (
   brokenPeriod: BrokenPeriodInfo,
   increaseRate: number,
   frequencyMonths: number,
+  startNo: number,
+  endNo: number,
   baseInstallmentAmount: number
 ): PaymentScheduleItem[] => {
   let remainingPrincipal = input.principal;
@@ -625,7 +742,9 @@ const buildIncreasingInstallmentSchedule = (
       baseInstallmentAmount,
       increaseRate,
       installmentNumber,
-      frequencyMonths
+      frequencyMonths,
+      startNo,
+      endNo
     );
     const interest = roundToCents(
       remainingPrincipal * monthlyInterestRate +
@@ -678,69 +797,161 @@ const buildIncreasingInstallmentSchedule = (
   });
 };
 
-const buildCustomPaymentScheduleWithAmount = (
-  input: LoanInput,
+const calculateCarryingCost = (
+  remainingPrincipal: number,
+  installmentNumber: number,
   monthlyInterestRate: number,
   kkdfRate: number,
   bsmvRate: number,
-  customPaymentMap: CustomPaymentMap,
-  automaticInstallmentAmount: number,
-  brokenPeriod: BrokenPeriodInfo,
-  shouldAdjustFinalAutomaticInstallment: boolean
-): PaymentScheduleItem[] => {
-  let remainingPrincipal = input.principal;
+  brokenPeriod: BrokenPeriodInfo
+) => {
+  const interest = roundToCents(
+    remainingPrincipal * monthlyInterestRate +
+      (installmentNumber === 1 ? brokenPeriod.interestDiff : 0)
+  );
+  const kkdf = roundToCents(interest * kkdfRate);
+  const bsmv = roundToCents(interest * bsmvRate);
+  const carryingCost = roundToCents(interest + kkdf + bsmv);
 
-  return Array.from({ length: input.term }, (_, index) => {
-    const installmentNumber = index + 1;
-    const customPaymentAmount = customPaymentMap.get(installmentNumber);
-    const isCustomPayment = customPaymentAmount !== undefined;
-    const isLastInstallment = installmentNumber === input.term;
-    let interest = roundToCents(
-      remainingPrincipal * monthlyInterestRate +
-        (installmentNumber === 1 ? brokenPeriod.interestDiff : 0)
+  return { interest, kkdf, bsmv, carryingCost };
+};
+
+const calculateRemainingAfterCustomPayment = (
+  remainingPrincipal: number,
+  installmentNumber: number,
+  customPaymentAmount: number,
+  monthlyInterestRate: number,
+  kkdfRate: number,
+  bsmvRate: number,
+  brokenPeriod: BrokenPeriodInfo
+): number => {
+  const { carryingCost } = calculateCarryingCost(
+    remainingPrincipal,
+    installmentNumber,
+    monthlyInterestRate,
+    kkdfRate,
+    bsmvRate,
+    brokenPeriod
+  );
+
+  return roundToCents(remainingPrincipal + carryingCost - customPaymentAmount);
+};
+
+const buildCustomPaymentItem = (
+  input: LoanInput,
+  remainingPrincipal: number,
+  installmentNumber: number,
+  customPaymentAmount: number,
+  monthlyInterestRate: number,
+  kkdfRate: number,
+  bsmvRate: number,
+  brokenPeriod: BrokenPeriodInfo
+): PaymentScheduleItem => {
+  let { interest, kkdf, bsmv, carryingCost } = calculateCarryingCost(
+    remainingPrincipal,
+    installmentNumber,
+    monthlyInterestRate,
+    kkdfRate,
+    bsmvRate,
+    brokenPeriod
+  );
+
+  if (customPaymentAmount < carryingCost) {
+    throw new Error(
+      'Özel taksit tutarı, ilgili dönemin faiz ve vergi tutarını karşılamalıdır.'
     );
-    let kkdf = roundToCents(interest * kkdfRate);
-    let bsmv = roundToCents(interest * bsmvRate);
-    let carryingCost = roundToCents(interest + kkdf + bsmv);
-    const isAdjustedFinalAutomatic =
-      shouldAdjustFinalAutomaticInstallment && isLastInstallment && !isCustomPayment;
-    const installment = isAdjustedFinalAutomatic
-      ? roundToCents(remainingPrincipal + carryingCost)
-      : isCustomPayment
-        ? customPaymentAmount
-        : automaticInstallmentAmount;
+  }
 
-    if (
-      (isCustomPayment && installment < carryingCost) ||
-      (!isCustomPayment && installment <= carryingCost)
-    ) {
-      throw new Error(
-        isCustomPayment
-          ? 'Özel taksit tutarı, ilgili dönemin faiz ve vergi tutarını karşılamalıdır.'
-          : 'Otomatik taksit tutarı ilgili dönemin faiz ve vergi tutarını karşılayamıyor.'
-      );
+  let principal = roundToCents(customPaymentAmount - carryingCost);
+
+  if (Math.abs(principal) < 0.01) {
+    principal = 0;
+  }
+
+  if (principal > remainingPrincipal + 0.01) {
+    const overpaymentAmount = roundToCents(principal - remainingPrincipal);
+
+    if (installmentNumber === input.term && overpaymentAmount <= 0.1) {
+      principal = roundToCents(remainingPrincipal);
+      carryingCost = roundToCents(customPaymentAmount - principal);
+      interest = roundToCents(carryingCost / (1 + kkdfRate + bsmvRate));
+      kkdf = roundToCents(interest * kkdfRate);
+      bsmv = roundToCents(customPaymentAmount - principal - interest - kkdf);
+    } else {
+      throw new Error('Özel ödeme kalan anaparayı negatife düşüremez.');
+    }
+  }
+
+  const finalPrincipalShortfall = roundToCents(remainingPrincipal - principal);
+
+  if (
+    installmentNumber === input.term &&
+    finalPrincipalShortfall > 0 &&
+    finalPrincipalShortfall <= 0.01
+  ) {
+    principal = roundToCents(remainingPrincipal);
+    carryingCost = roundToCents(customPaymentAmount - principal);
+    interest = roundToCents(carryingCost / (1 + kkdfRate + bsmvRate));
+    kkdf = roundToCents(interest * kkdfRate);
+    bsmv = roundToCents(customPaymentAmount - principal - interest - kkdf);
+  }
+
+  principal = Math.min(principal, remainingPrincipal);
+
+  let nextRemainingPrincipal = roundToCents(remainingPrincipal - principal);
+
+  if (Math.abs(nextRemainingPrincipal) <= 0.01) {
+    nextRemainingPrincipal = 0;
+  }
+
+  return {
+    installmentNumber,
+    date: addMonths(input.firstInstallmentDate, installmentNumber - 1),
+    installment: customPaymentAmount,
+    principal,
+    interest,
+    kkdf,
+    bsmv,
+    remainingPrincipal: nextRemainingPrincipal,
+    isCustomPayment: true,
+  };
+};
+
+const simulateAutomaticSegmentRemaining = (
+  startRemainingPrincipal: number,
+  startInstallmentNumber: number,
+  segmentLength: number,
+  automaticInstallmentAmount: number,
+  monthlyInterestRate: number,
+  kkdfRate: number,
+  bsmvRate: number,
+  brokenPeriod: BrokenPeriodInfo
+): number => {
+  let remainingPrincipal = startRemainingPrincipal;
+
+  for (let offset = 0; offset < segmentLength; offset += 1) {
+    const installmentNumber = startInstallmentNumber + offset;
+    const { carryingCost } = calculateCarryingCost(
+      remainingPrincipal,
+      installmentNumber,
+      monthlyInterestRate,
+      kkdfRate,
+      bsmvRate,
+      brokenPeriod
+    );
+
+    if (automaticInstallmentAmount < carryingCost) {
+      return Number.POSITIVE_INFINITY;
     }
 
-    let principal = isAdjustedFinalAutomatic
-      ? roundToCents(remainingPrincipal)
-      : roundToCents(installment - carryingCost);
+    let principal = roundToCents(automaticInstallmentAmount - carryingCost);
 
-    if (isCustomPayment && Math.abs(principal) < 0.01) {
+    if (Math.abs(principal) < 0.01) {
       principal = 0;
     }
 
     if (principal > remainingPrincipal + 0.01) {
-      const overpaymentAmount = roundToCents(principal - remainingPrincipal);
-
-      if (isLastInstallment && isCustomPayment && overpaymentAmount <= 0.1) {
-        principal = roundToCents(remainingPrincipal);
-        carryingCost = roundToCents(installment - principal);
-        interest = roundToCents(carryingCost / (1 + kkdfRate + bsmvRate));
-        kkdf = roundToCents(interest * kkdfRate);
-        bsmv = roundToCents(installment - principal - interest - kkdf);
-      } else {
-        throw new Error('Özel ödeme kalan anaparayı negatife düşüremez.');
-      }
+      return Number.NEGATIVE_INFINITY;
     }
 
     remainingPrincipal = roundToCents(remainingPrincipal - principal);
@@ -748,154 +959,81 @@ const buildCustomPaymentScheduleWithAmount = (
     if (Math.abs(remainingPrincipal) < 0.01) {
       remainingPrincipal = 0;
     }
-
-    return {
-      installmentNumber,
-      date: addMonths(input.firstInstallmentDate, index),
-      installment,
-      principal,
-      interest,
-      kkdf,
-      bsmv,
-      remainingPrincipal,
-      isCustomPayment,
-    };
-  });
-};
-
-const simulateCustomPaymentFinalRemaining = (
-  input: LoanInput,
-  monthlyInterestRate: number,
-  kkdfRate: number,
-  bsmvRate: number,
-  customPaymentMap: CustomPaymentMap,
-  automaticInstallmentAmount: number,
-  brokenPeriod: BrokenPeriodInfo
-): number => {
-  let remainingPrincipal = input.principal;
-
-  for (let index = 0; index < input.term; index += 1) {
-    const installmentNumber = index + 1;
-    const customPaymentAmount = customPaymentMap.get(installmentNumber);
-    const isCustomPayment = customPaymentAmount !== undefined;
-    const interest = roundToCents(
-      remainingPrincipal * monthlyInterestRate +
-        (installmentNumber === 1 ? brokenPeriod.interestDiff : 0)
-    );
-    const kkdf = roundToCents(interest * kkdfRate);
-    const bsmv = roundToCents(interest * bsmvRate);
-    const carryingCost = roundToCents(interest + kkdf + bsmv);
-    const installment = isCustomPayment
-      ? customPaymentAmount
-      : automaticInstallmentAmount;
-
-    if (
-      (isCustomPayment && installment < carryingCost) ||
-      (!isCustomPayment && installment <= carryingCost)
-    ) {
-      if (isCustomPayment) {
-        throw new Error(
-          'Özel taksit tutarı, ilgili dönemin faiz ve vergi tutarını karşılamalıdır.'
-        );
-      }
-
-      return Number.POSITIVE_INFINITY;
-    }
-
-    const calculatedPrincipal = roundToCents(installment - carryingCost);
-    const principal =
-      isCustomPayment && Math.abs(calculatedPrincipal) < 0.01
-        ? 0
-        : calculatedPrincipal;
-
-    if (principal > remainingPrincipal + 0.01) {
-      return Number.NEGATIVE_INFINITY;
-    }
-
-    remainingPrincipal = roundToCents(remainingPrincipal - principal);
   }
 
   return remainingPrincipal;
 };
 
-const solveAutomaticCustomPaymentInstallment = (
-  input: LoanInput,
+const solveAutomaticSegmentInstallment = (
+  startRemainingPrincipal: number,
+  startInstallmentNumber: number,
+  segmentLength: number,
+  targetRemainingPrincipal: number,
   monthlyInterestRate: number,
   kkdfRate: number,
   bsmvRate: number,
-  customPaymentMap: CustomPaymentMap,
-  brokenPeriod: BrokenPeriodInfo,
-  baseInstallment: number
+  brokenPeriod: BrokenPeriodInfo
 ): number => {
-  const automaticInstallmentCount = input.term - customPaymentMap.size;
-
-  if (automaticInstallmentCount <= 0) {
-    const schedule = buildCustomPaymentScheduleWithAmount(
-      input,
-      monthlyInterestRate,
-      kkdfRate,
-      bsmvRate,
-      customPaymentMap,
-      0,
-      brokenPeriod,
-      false
-    );
-    const finalRemaining =
-      schedule[schedule.length - 1]?.remainingPrincipal ?? input.principal;
-
-    if (Math.abs(finalRemaining) > 0.01) {
-      throw new Error(
-        'Tüm taksitler özel girilmişse ödeme planı vade sonunda anaparayı kapatmalıdır.'
-      );
-    }
-
+  if (segmentLength <= 0) {
     return 0;
   }
 
-  let low = 0.01;
-  let high = Math.max(baseInstallment, 0.01);
-  let highRemaining = simulateCustomPaymentFinalRemaining(
-    input,
+  let low = 0;
+  let high = Math.max(
+    calculateStandardInstallment(
+      startRemainingPrincipal,
+      segmentLength,
+      monthlyInterestRate,
+      kkdfRate,
+      bsmvRate
+    ),
+    0.01
+  );
+  let highRemaining = simulateAutomaticSegmentRemaining(
+    startRemainingPrincipal,
+    startInstallmentNumber,
+    segmentLength,
+    high,
     monthlyInterestRate,
     kkdfRate,
     bsmvRate,
-    customPaymentMap,
-    high,
     brokenPeriod
   );
   let guard = 0;
 
-  while (highRemaining > 0 && guard < 60) {
+  while (highRemaining > targetRemainingPrincipal && guard < 60) {
     high *= 2;
-    highRemaining = simulateCustomPaymentFinalRemaining(
-      input,
+    highRemaining = simulateAutomaticSegmentRemaining(
+      startRemainingPrincipal,
+      startInstallmentNumber,
+      segmentLength,
+      high,
       monthlyInterestRate,
       kkdfRate,
       bsmvRate,
-      customPaymentMap,
-      high,
       brokenPeriod
     );
     guard += 1;
   }
 
-  if (highRemaining > 0) {
+  if (highRemaining > targetRemainingPrincipal) {
     throw new Error('Özel ödeme planı için otomatik taksit çözülemedi.');
   }
 
   for (let iteration = 0; iteration < CUSTOM_PAYMENT_MAX_ITERATIONS; iteration += 1) {
     const middle = (low + high) / 2;
-    const finalRemaining = simulateCustomPaymentFinalRemaining(
-      input,
+    const remaining = simulateAutomaticSegmentRemaining(
+      startRemainingPrincipal,
+      startInstallmentNumber,
+      segmentLength,
+      middle,
       monthlyInterestRate,
       kkdfRate,
       bsmvRate,
-      customPaymentMap,
-      middle,
       brokenPeriod
     );
 
-    if (finalRemaining > 0) {
+    if (remaining > targetRemainingPrincipal) {
       low = middle;
     } else {
       high = middle;
@@ -905,13 +1043,227 @@ const solveAutomaticCustomPaymentInstallment = (
   return roundToCents(high);
 };
 
+const solveRemainingBeforeFinalCustomPayment = (
+  maxRemainingPrincipal: number,
+  installmentNumber: number,
+  customPaymentAmount: number,
+  monthlyInterestRate: number,
+  kkdfRate: number,
+  bsmvRate: number,
+  brokenPeriod: BrokenPeriodInfo
+): number => {
+  const remainingAtMax = calculateRemainingAfterCustomPayment(
+    maxRemainingPrincipal,
+    installmentNumber,
+    customPaymentAmount,
+    monthlyInterestRate,
+    kkdfRate,
+    bsmvRate,
+    brokenPeriod
+  );
+
+  if (remainingAtMax < -0.01) {
+    throw new Error('Özel ödeme kalan anaparayı negatife düşüremez.');
+  }
+
+  let low = 0;
+  let high = maxRemainingPrincipal;
+
+  for (let iteration = 0; iteration < CUSTOM_PAYMENT_MAX_ITERATIONS; iteration += 1) {
+    const middle = (low + high) / 2;
+    const finalRemaining = calculateRemainingAfterCustomPayment(
+      middle,
+      installmentNumber,
+      customPaymentAmount,
+      monthlyInterestRate,
+      kkdfRate,
+      bsmvRate,
+      brokenPeriod
+    );
+
+    if (finalRemaining > 0) {
+      high = middle;
+    } else {
+      low = middle;
+    }
+  }
+
+  return roundToCents((low + high) / 2);
+};
+
+const buildCustomPaymentSchedule = (
+  input: LoanInput,
+  monthlyInterestRate: number,
+  kkdfRate: number,
+  bsmvRate: number,
+  customPaymentMap: CustomPaymentMap,
+  brokenPeriod: BrokenPeriodInfo
+): { schedule: PaymentScheduleItem[]; automaticInstallmentAmount?: number } => {
+  const customInstallmentNumbers = [...customPaymentMap.keys()].sort((a, b) => a - b);
+  const schedule: PaymentScheduleItem[] = [];
+  let remainingPrincipal = input.principal;
+  let automaticInstallmentAmount: number | undefined;
+  let currentSegment:
+    | {
+        endInstallmentNumber: number;
+        amount: number;
+        targetRemainingPrincipal?: number;
+      }
+    | undefined;
+
+  for (let installmentNumber = 1; installmentNumber <= input.term; installmentNumber += 1) {
+    const customPaymentAmount = customPaymentMap.get(installmentNumber);
+
+    if (customPaymentAmount !== undefined) {
+      const item = buildCustomPaymentItem(
+        input,
+        remainingPrincipal,
+        installmentNumber,
+        customPaymentAmount,
+        monthlyInterestRate,
+        kkdfRate,
+        bsmvRate,
+        brokenPeriod
+      );
+
+      schedule.push(item);
+      remainingPrincipal = item.remainingPrincipal;
+      currentSegment = undefined;
+      continue;
+    }
+
+    if (!currentSegment || installmentNumber > currentSegment.endInstallmentNumber) {
+      const nextCustomInstallmentNumber = customInstallmentNumbers.find(
+        (customInstallmentNumber) => customInstallmentNumber > installmentNumber
+      );
+      const segmentEndInstallmentNumber =
+        nextCustomInstallmentNumber !== undefined
+          ? nextCustomInstallmentNumber - 1
+          : input.term;
+      const segmentLength =
+        segmentEndInstallmentNumber - installmentNumber + 1;
+      let segmentAmount: number;
+      let targetRemainingPrincipal: number | undefined;
+
+      if (nextCustomInstallmentNumber === input.term) {
+        targetRemainingPrincipal = solveRemainingBeforeFinalCustomPayment(
+          remainingPrincipal,
+          nextCustomInstallmentNumber,
+          customPaymentMap.get(nextCustomInstallmentNumber) ?? 0,
+          monthlyInterestRate,
+          kkdfRate,
+          bsmvRate,
+          brokenPeriod
+        );
+        segmentAmount = solveAutomaticSegmentInstallment(
+          remainingPrincipal,
+          installmentNumber,
+          segmentLength,
+          targetRemainingPrincipal,
+          monthlyInterestRate,
+          kkdfRate,
+          bsmvRate,
+          brokenPeriod
+        );
+      } else {
+        segmentAmount = solveAutomaticSegmentInstallment(
+          remainingPrincipal,
+          installmentNumber,
+          input.term - installmentNumber + 1,
+          0,
+          monthlyInterestRate,
+          kkdfRate,
+          bsmvRate,
+          brokenPeriod
+        );
+      }
+
+      currentSegment = {
+        endInstallmentNumber: segmentEndInstallmentNumber,
+        amount: segmentAmount,
+        targetRemainingPrincipal,
+      };
+
+      if (automaticInstallmentAmount === undefined) {
+        automaticInstallmentAmount = segmentAmount;
+      }
+    }
+
+    const { interest, kkdf, bsmv, carryingCost } = calculateCarryingCost(
+      remainingPrincipal,
+      installmentNumber,
+      monthlyInterestRate,
+      kkdfRate,
+      bsmvRate,
+      brokenPeriod
+    );
+    const isLastAutomaticInSegment =
+      installmentNumber === currentSegment.endInstallmentNumber;
+    const targetRemainingPrincipal =
+      isLastAutomaticInSegment && currentSegment.targetRemainingPrincipal !== undefined
+        ? currentSegment.targetRemainingPrincipal
+        : installmentNumber === input.term
+          ? 0
+          : undefined;
+    let principal =
+      targetRemainingPrincipal !== undefined
+        ? roundToCents(remainingPrincipal - targetRemainingPrincipal)
+        : roundToCents(currentSegment.amount - carryingCost);
+
+    if (Math.abs(principal) < 0.01) {
+      principal = 0;
+    }
+
+    if (principal < 0 || currentSegment.amount < carryingCost) {
+      throw new Error(
+        'Otomatik taksit tutarı ilgili dönemin faiz ve vergi tutarını karşılayamıyor.'
+      );
+    }
+
+    if (principal > remainingPrincipal + 0.01) {
+      throw new Error('Özel ödeme kalan anaparayı negatife düşüremez.');
+    }
+
+    principal = Math.min(principal, remainingPrincipal);
+
+    const installment =
+      targetRemainingPrincipal !== undefined
+        ? roundToCents(principal + carryingCost)
+        : currentSegment.amount;
+
+    remainingPrincipal = roundToCents(remainingPrincipal - principal);
+
+    if (Math.abs(remainingPrincipal) < 0.01) {
+      remainingPrincipal = 0;
+    }
+
+    schedule.push({
+      installmentNumber,
+      date: addMonths(input.firstInstallmentDate, installmentNumber - 1),
+      installment,
+      principal,
+      interest,
+      kkdf,
+      bsmv,
+      remainingPrincipal,
+      isCustomPayment: false,
+    });
+  }
+
+  return { schedule, automaticInstallmentAmount };
+};
+
 const calculateBrokenPeriod = (
   input: LoanInput,
   monthlyInterestRate: number,
   kkdfRate: number,
-  bsmvRate: number
+  bsmvRate: number,
+  standardFirstInstallmentDelayMonths = 1
 ): BrokenPeriodInfo => {
-  const standardFirstInstallmentDate = addMonths(input.creditUsageDate, 1);
+  const standardFirstInstallmentDate = addMonths(
+    input.creditUsageDate,
+    standardFirstInstallmentDelayMonths
+  );
   const diffDays = daysBetween(
     standardFirstInstallmentDate,
     input.firstInstallmentDate
@@ -933,6 +1285,11 @@ const calculateBrokenPeriod = (
 };
 
 export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
+  const originalInput: LoanInput = {
+    ...input,
+    deductFirstInstallmentDelayFromTerm:
+      input.deductFirstInstallmentDelayFromTerm,
+  };
   const planType: LoanPlanType = input.planType ?? 'standard';
 
   if (
@@ -942,17 +1299,18 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
     throw new Error('Kredi kullanım tarihi ve ilk taksit tarihi geçerli olmalıdır.');
   }
 
-  const effectiveInterestOnlyInstallmentCount =
-    planType === 'interestOnly'
-      ? calculateInterestOnlyEffectiveInstallmentCount(input)
-      : input.term;
-
   if (input.principal <= 0) {
     throw new Error('Kredi tutarı pozitif olmalıdır.');
   }
 
   if (!Number.isInteger(input.term) || input.term <= 0) {
     throw new Error('Vade pozitif tam sayı olmalıdır.');
+  }
+
+  if (input.deductFirstInstallmentDelayFromTerm === undefined) {
+    throw new Error(
+      'İlk taksit ertelemesini vadeden düş seçimi açık veya kapalı olarak belirtilmelidir.'
+    );
   }
 
   if (
@@ -966,6 +1324,55 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
   if (input.firstInstallmentDate < input.creditUsageDate) {
     throw new Error('İlk taksit tarihi kredi kullanım tarihinden önce olamaz.');
   }
+
+  const firstInstallmentDelayMonths = calculateFullMonthDelay(
+    input.creditUsageDate,
+    input.firstInstallmentDate
+  );
+  const isNormalFirstInstallmentStartDate = isNormalFirstInstallmentStart(
+    input.creditUsageDate,
+    input.firstInstallmentDate
+  );
+  const shouldDeductFirstInstallmentDelay =
+    input.deductFirstInstallmentDelayFromTerm === true &&
+    planType !== 'interestOnly';
+  const deductedDelayMonths =
+    shouldDeductFirstInstallmentDelay && !isNormalFirstInstallmentStartDate
+      ? Math.max(0, firstInstallmentDelayMonths - 1)
+      : 0;
+  let effectiveInstallmentCount = input.term;
+  let firstInstallmentDelayInfo: string | undefined;
+
+  if (deductedDelayMonths > 0) {
+    if (deductedDelayMonths >= input.term) {
+      throw new Error(
+        'İlk taksit ertelemesi vadeden büyük veya vadeye eşit olamaz.'
+      );
+    }
+
+    effectiveInstallmentCount = input.term - deductedDelayMonths;
+
+    if (effectiveInstallmentCount < 1) {
+      throw new Error(
+        'İlk taksit ertelemesi sonrası en az 1 taksit kalmalıdır.'
+      );
+    }
+
+    firstInstallmentDelayInfo = buildFirstInstallmentDelayInfo(
+      input.term,
+      deductedDelayMonths,
+      effectiveInstallmentCount
+    );
+    input = {
+      ...input,
+      term: effectiveInstallmentCount,
+    };
+  }
+
+  const effectiveInterestOnlyInstallmentCount =
+    planType === 'interestOnly'
+      ? calculateInterestOnlyEffectiveInstallmentCount(input)
+      : input.term;
 
   if (planType === 'prepaidInterest') {
     if (
@@ -1044,6 +1451,42 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
     if (input.installmentIncreaseFrequencyMonths > input.term) {
       throw new Error('Artış sıklığı vadeden büyük olamaz.');
     }
+
+    if (input.installmentIncreaseStartNo === undefined) {
+      throw new Error('Artış başlangıç taksiti girilmelidir.');
+    }
+
+    if (!Number.isInteger(input.installmentIncreaseStartNo)) {
+      throw new Error('Artış başlangıç taksiti tam sayı olmalıdır.');
+    }
+
+    if (input.installmentIncreaseStartNo <= 0) {
+      throw new Error('Artış başlangıç taksiti pozitif olmalıdır.');
+    }
+
+    if (input.installmentIncreaseEndNo === undefined) {
+      throw new Error('Artış bitiş taksiti girilmelidir.');
+    }
+
+    if (!Number.isInteger(input.installmentIncreaseEndNo)) {
+      throw new Error('Artış bitiş taksiti tam sayı olmalıdır.');
+    }
+
+    if (input.installmentIncreaseEndNo <= 0) {
+      throw new Error('Artış bitiş taksiti pozitif olmalıdır.');
+    }
+
+    if (input.installmentIncreaseStartNo > input.installmentIncreaseEndNo) {
+      throw new Error('Artış başlangıç taksiti bitiş taksitinden büyük olamaz.');
+    }
+
+    if (input.installmentIncreaseStartNo > input.term) {
+      throw new Error('Artış başlangıç taksiti vadeden büyük olamaz.');
+    }
+
+    if (input.installmentIncreaseEndNo > input.term) {
+      throw new Error('Artış bitiş taksiti vadeden büyük olamaz.');
+    }
   }
 
   const monthlyInterestRate = input.monthlyInterestRatePercent / 100;
@@ -1068,6 +1511,8 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
   let postInterestOnlyInstallmentAmount: number | undefined;
   let installmentIncreaseRatePercent: number | undefined;
   let installmentIncreaseFrequencyMonths: number | undefined;
+  let installmentIncreaseStartNo: number | undefined;
+  let installmentIncreaseEndNo: number | undefined;
   let baseIncreasingInstallmentAmount: number | undefined;
   const customPaymentMap =
     planType === 'customPayment' ? normalizeCustomPayments(input) : undefined;
@@ -1148,19 +1593,26 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
     input,
     effectiveMonthlyInterestRate,
     kkdfRate,
-    bsmvRate
+    bsmvRate,
+    deductedDelayMonths > 0
+      ? firstInstallmentDelayMonths
+      : 1
   );
 
-  if (planType === 'customPayment' && customPaymentMap) {
-    automaticInstallmentAmount = solveAutomaticCustomPaymentInstallment(
-      input,
-      effectiveMonthlyInterestRate,
-      kkdfRate,
-      bsmvRate,
-      customPaymentMap,
-      brokenPeriod,
-      standardInstallment
-    );
+  const customPaymentScheduleResult =
+    planType === 'customPayment' && customPaymentMap
+      ? buildCustomPaymentSchedule(
+          input,
+          effectiveMonthlyInterestRate,
+          kkdfRate,
+          bsmvRate,
+          customPaymentMap,
+          brokenPeriod
+        )
+      : undefined;
+
+  if (customPaymentScheduleResult) {
+    automaticInstallmentAmount = customPaymentScheduleResult.automaticInstallmentAmount;
   }
 
   if (planType === 'increasingInstallment') {
@@ -1170,6 +1622,16 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
     }
 
     installmentIncreaseFrequencyMonths = input.installmentIncreaseFrequencyMonths;
+    installmentIncreaseStartNo = input.installmentIncreaseStartNo;
+    installmentIncreaseEndNo = input.installmentIncreaseEndNo;
+
+    if (
+      installmentIncreaseStartNo === undefined ||
+      installmentIncreaseEndNo === undefined
+    ) {
+      throw new Error('Artan taksitli plan için artış taksit aralığı girilmelidir.');
+    }
+
     const increaseRate = installmentIncreaseRatePercent / 100;
     baseIncreasingInstallmentAmount = solveIncreasingBaseInstallment(
       input,
@@ -1179,22 +1641,15 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
       brokenPeriod,
       increaseRate,
       installmentIncreaseFrequencyMonths,
+      installmentIncreaseStartNo,
+      installmentIncreaseEndNo,
       standardInstallment
     );
   }
 
   const baseSchedule =
-    planType === 'customPayment' && customPaymentMap
-      ? buildCustomPaymentScheduleWithAmount(
-          input,
-          effectiveMonthlyInterestRate,
-          kkdfRate,
-          bsmvRate,
-          customPaymentMap,
-          automaticInstallmentAmount ?? 0,
-          brokenPeriod,
-          true
-        )
+    customPaymentScheduleResult
+      ? customPaymentScheduleResult.schedule
       : planType === 'equalPrincipal'
         ? buildEqualPrincipalSchedule(
             input,
@@ -1218,6 +1673,8 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
           : planType === 'increasingInstallment' &&
               installmentIncreaseRatePercent !== undefined &&
               installmentIncreaseFrequencyMonths !== undefined &&
+              installmentIncreaseStartNo !== undefined &&
+              installmentIncreaseEndNo !== undefined &&
               baseIncreasingInstallmentAmount !== undefined
             ? buildIncreasingInstallmentSchedule(
                 input,
@@ -1227,6 +1684,8 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
                 brokenPeriod,
                 installmentIncreaseRatePercent / 100,
                 installmentIncreaseFrequencyMonths,
+                installmentIncreaseStartNo,
+                installmentIncreaseEndNo,
                 baseIncreasingInstallmentAmount
               )
           : buildStandardSchedule(
@@ -1353,9 +1812,11 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
       totalBsmv: 0,
     }
   );
+  const resultEffectiveInstallmentCount =
+    planType === 'interestOnly' ? effectiveInterestOnlyInstallmentCount : input.term;
 
   return {
-    input,
+    input: originalInput,
     planType,
     standardInstallment,
     firstInstallment:
@@ -1364,6 +1825,11 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
         : schedule[0]?.installment ?? 0,
     schedule,
     brokenPeriod,
+    deductFirstInstallmentDelayFromTerm:
+      originalInput.deductFirstInstallmentDelayFromTerm === true,
+    firstInstallmentDelayMonths,
+    deductedDelayMonths,
+    effectiveInstallmentCount: resultEffectiveInstallmentCount,
     discountedMonthlyRate,
     prepaidInterestInput,
     realizedPrepaidInterest,
@@ -1372,6 +1838,8 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
     postInterestOnlyInstallmentAmount,
     installmentIncreaseRatePercent,
     installmentIncreaseFrequencyMonths,
+    installmentIncreaseStartNo,
+    installmentIncreaseEndNo,
     baseInstallmentAmount: baseIncreasingInstallmentAmount,
     firstInstallmentAmount:
       planType === 'prepaidInterest'
@@ -1379,7 +1847,7 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
         : schedule[0]?.installment,
     lastInstallmentAmount: schedule[schedule.length - 1]?.installment,
     automaticInstallmentAmount,
-    infoMessages: [],
+    infoMessages: firstInstallmentDelayInfo ? [firstInstallmentDelayInfo] : [],
     warnings: [],
     ...totals,
   };

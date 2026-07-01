@@ -60,3 +60,41 @@ export const parseInstallmentIncreaseFrequencyMonths = (
 
   return frequencyMonths;
 };
+
+export const parseInstallmentIncreaseBoundary = (
+  value: string,
+  term: number,
+  label: 'başlangıç' | 'bitiş'
+): number => {
+  const normalized = value.trim().replace(/\s/g, '');
+  const displayLabel =
+    label === 'başlangıç' ? 'Artış başlangıç taksiti' : 'Artış bitiş taksiti';
+
+  if (!normalized) {
+    throw new Error(`${displayLabel} boş olamaz.`);
+  }
+
+  if (normalized.includes('-')) {
+    throw new Error(`${displayLabel} negatif olamaz.`);
+  }
+
+  if (normalized.includes(',') || normalized.includes('.')) {
+    throw new Error(`${displayLabel} tam sayı olmalıdır.`);
+  }
+
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error(`${displayLabel} geçerli olmalıdır.`);
+  }
+
+  const boundary = Number(normalized);
+
+  if (boundary === 0) {
+    throw new Error(`${displayLabel} 0 olamaz.`);
+  }
+
+  if (boundary > term) {
+    throw new Error(`${displayLabel} vadeden büyük olamaz.`);
+  }
+
+  return boundary;
+};

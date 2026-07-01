@@ -14,11 +14,14 @@ export type LoanInput = {
   bsmvRatePercent: number;
   creditUsageDate: Date;
   firstInstallmentDate: Date;
+  deductFirstInstallmentDelayFromTerm?: boolean;
   planType?: LoanPlanType;
   prepaidInterestAmount?: number;
   interestOnlyInstallmentCount?: number;
   installmentIncreaseRatePercent?: number;
   installmentIncreaseFrequencyMonths?: number;
+  installmentIncreaseStartNo?: number;
+  installmentIncreaseEndNo?: number;
   customPayments?: Array<{
     installmentNo: number;
     amount: number;
@@ -62,6 +65,10 @@ export type LoanCalculationResult = {
   totalBsmv: number;
   schedule: PaymentScheduleItem[];
   brokenPeriod: BrokenPeriodInfo;
+  deductFirstInstallmentDelayFromTerm: boolean;
+  firstInstallmentDelayMonths: number;
+  deductedDelayMonths: number;
+  effectiveInstallmentCount: number;
   discountedMonthlyRate?: number;
   prepaidInterestInput?: number;
   realizedPrepaidInterest?: number;
@@ -70,6 +77,8 @@ export type LoanCalculationResult = {
   postInterestOnlyInstallmentAmount?: number;
   installmentIncreaseRatePercent?: number;
   installmentIncreaseFrequencyMonths?: number;
+  installmentIncreaseStartNo?: number;
+  installmentIncreaseEndNo?: number;
   baseInstallmentAmount?: number;
   firstInstallmentAmount?: number;
   lastInstallmentAmount?: number;

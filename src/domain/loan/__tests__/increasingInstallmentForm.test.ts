@@ -1,4 +1,5 @@
 import {
+  parseInstallmentIncreaseBoundary,
   parseInstallmentIncreaseFrequencyMonths,
   parseInstallmentIncreaseRatePercent,
 } from '../increasingInstallmentForm';
@@ -46,6 +47,26 @@ describe('increasingInstallmentForm', () => {
       'tam sayı'
     );
     expect(() => parseInstallmentIncreaseFrequencyMonths('13', 12)).toThrow(
+      'vadeden büyük'
+    );
+  });
+
+  it('accepts and rejects increase range boundaries', () => {
+    expect(parseInstallmentIncreaseBoundary('1', 60, 'başlangıç')).toBe(1);
+    expect(parseInstallmentIncreaseBoundary('48', 60, 'bitiş')).toBe(48);
+    expect(() => parseInstallmentIncreaseBoundary('', 60, 'başlangıç')).toThrow(
+      'boş olamaz'
+    );
+    expect(() => parseInstallmentIncreaseBoundary('0', 60, 'başlangıç')).toThrow(
+      '0 olamaz'
+    );
+    expect(() => parseInstallmentIncreaseBoundary('-1', 60, 'bitiş')).toThrow(
+      'negatif olamaz'
+    );
+    expect(() => parseInstallmentIncreaseBoundary('1,5', 60, 'başlangıç')).toThrow(
+      'tam sayı'
+    );
+    expect(() => parseInstallmentIncreaseBoundary('61', 60, 'bitiş')).toThrow(
       'vadeden büyük'
     );
   });

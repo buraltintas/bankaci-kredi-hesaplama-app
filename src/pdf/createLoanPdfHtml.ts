@@ -136,14 +136,11 @@ export const createLoanPdfHtml = (
               <div class="box"><div class="label">Son taksit tutarı</div><div class="value">${formatCurrency(
                 result.lastInstallmentAmount ?? 0
               )}</div></div>`
-	            : isCustomPayment
-	              ? `<div class="box"><div class="label">Otomatik taksit</div><div class="value">${formatCurrency(
-	                  result.automaticInstallmentAmount ?? 0
-	                )}</div></div>
-                <div class="box"><div class="label">Özel ödeme sayısı</div><div class="value">${
-                  result.input.customPayments?.length ?? 0
-                }</div></div>
-                <div class="box"><div class="label">Son taksit tutarı</div><div class="value">${formatCurrency(
+		            : isCustomPayment
+		              ? `<div class="box"><div class="label">Özel ödeme sayısı</div><div class="value">${
+	                  result.input.customPayments?.length ?? 0
+	                }</div></div>
+	                <div class="box"><div class="label">Son taksit tutarı</div><div class="value">${formatCurrency(
 	                  result.lastInstallmentAmount ?? 0
 	                )}</div></div>`
               : isInterestOnly
@@ -166,6 +163,12 @@ export const createLoanPdfHtml = (
                   <div class="box"><div class="label">Artış Sıklığı</div><div class="value">${
                     result.installmentIncreaseFrequencyMonths ?? 12
                   } ay</div></div>
+                  <div class="box"><div class="label">Artış Başlangıç Taksiti</div><div class="value">${
+                    result.installmentIncreaseStartNo ?? 1
+                  }. taksit</div></div>
+                  <div class="box"><div class="label">Artış Bitiş Taksiti</div><div class="value">${
+                    result.installmentIncreaseEndNo ?? result.input.term
+                  }. taksit</div></div>
                   <div class="box"><div class="label">İlk Taksit</div><div class="value">${formatCurrency(
                     result.firstInstallmentAmount ?? result.firstInstallment
                   )}</div></div>
@@ -203,6 +206,21 @@ export const createLoanPdfHtml = (
               ${interestOnlyEffectiveInstallmentInfo
                 .split('\n')
                 .map(escapeHtml)
+                .join('<br />')}
+            </section>`
+          : ''
+      }
+      ${
+        result.infoMessages?.length
+          ? `<section class="broken">
+              <strong>Taksit sayısı bilgilendirmesi:</strong><br />
+              ${result.infoMessages
+                .map((message) =>
+                  message
+                    .split('\n')
+                    .map(escapeHtml)
+                    .join('<br />')
+                )
                 .join('<br />')}
             </section>`
           : ''
