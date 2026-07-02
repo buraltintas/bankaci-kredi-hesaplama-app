@@ -1,50 +1,176 @@
-# Welcome to your Expo app 👋
+# Bankacı: Kredi Hesaplama
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Bankacı: Kredi Hesaplama, kredi ödeme planlarını sahada ve müşteri görüşmelerinde hızlıca oluşturmak için geliştirilmiş Expo / React Native uygulamasıdır.
 
-## Get started
+Uygulama standart kredi hesaplamasının yanında bankacılıkta sık kullanılan gelişmiş ödeme planlarını, PDF çıktısını, paylaşım metnini ve son hesaplamalar geçmişini destekler.
 
-1. Install dependencies
+## Mağaza Linkleri
 
-   ```bash
-   npm install
-   ```
+- iOS: [App Store](https://apps.apple.com/tr/app/bankac%C4%B1-kredi-hesaplama/id6742378996)
+- Android: [Google Play](https://play.google.com/store/apps/details?id=com.xewor.bankacikredihesaplama)
 
-2. Start the app
+## Özellikler
 
-   ```bash
-    npx expo start
-   ```
+- Standart sabit taksitli kredi hesaplama
+- Peşin faiz ödemeli plan
+- Eşit anapara ödemeli plan
+- Özel / balon ödeme planı
+- Anapara ödemesiz dönemli plan
+- Artan taksitli plan
+- İlk taksit tarihi ve kırık dönem desteği
+- Opsiyonel "ilk taksit ertelemesini vadeden düş" davranışı
+- KKDF / BSMV dahil efektif taksit ve toplam hesapları
+- PDF oluşturma ve paylaşım
+- Son 20 hesaplama geçmişi
+- AdMob interstitial reklam akışı
+- Android ve iOS native development build desteği
 
-In the output, you'll find options to open the app in a
+## Teknoloji
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- Expo SDK 54
+- React Native 0.81
+- React 19
+- TypeScript
+- Jest
+- EAS Build / Submit
+- react-native-google-mobile-ads
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Kurulum
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Lokal Çalıştırma
 
-## Learn more
+Metro bundler:
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+npm start
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+iOS simulator:
 
-## Join the community
+```bash
+npm run ios
+```
 
-Join our community of developers creating universal apps.
+iOS gerçek cihaz native development build:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npm run ios:device
+```
+
+Android emulator veya bağlı cihaz:
+
+```bash
+npm run android
+```
+
+Android build için Java/JDK kurulu olmalıdır.
+
+## Test ve Kontroller
+
+Typecheck:
+
+```bash
+npm run typecheck
+```
+
+CI testleri:
+
+```bash
+npm run test:ci
+```
+
+Expo lint:
+
+```bash
+npm run lint
+```
+
+Sık kullanılan component lint kontrolü:
+
+```bash
+npx eslint components/LoanCalculator.js components/LoanResult.js
+```
+
+## Reklam Test Notları
+
+Development / simulator ortamında Google test interstitial ad unit ID kullanılır.
+
+Production ortamında iOS ve Android için production AdMob ID'leri kullanılır. Production reklamlarla yoğun manuel test yapılmamalıdır.
+
+Reklam akışı PDF ve paylaşım aksiyonlarını bloklamamalıdır:
+
+- Reklam hazırsa gösterilir.
+- Reklam kapatılınca asıl PDF/paylaşım aksiyonu devam eder.
+- Reklam hazır değilse aksiyon direkt devam eder.
+- Reklam gösterimi fail olursa kullanıcı aksiyonu kaybolmaz.
+
+## EAS Build
+
+Android production build:
+
+```bash
+eas build --platform android --profile production
+```
+
+iOS production build:
+
+```bash
+eas build --platform ios --profile production
+```
+
+Android son build submit:
+
+```bash
+eas submit --platform android --latest
+```
+
+iOS son build submit:
+
+```bash
+eas submit --platform ios --latest
+```
+
+Not: `eas.json` içinde production build için `autoIncrement` açıktır ve `appVersionSource` remote olarak ayarlanmıştır. EAS, store build numaralarını remote version bilgisine göre artırabilir.
+
+## Sürüm Bilgisi
+
+Mevcut uygulama sürümü:
+
+- App version: `2.1.1`
+- Android package: `com.xewor.bankacikredihesaplama`
+- iOS bundle identifier: `com.xewor.bankacikredihesaplama`
+
+## Proje Yapısı
+
+- `components/LoanCalculator.js`: ana form, geçmiş, PDF/paylaşım aksiyonları
+- `components/LoanResult.js`: sonuç ekranı ve ödeme planı görünümü
+- `src/domain/loan/calculateLoan.ts`: hesaplama motoru
+- `src/domain/loan/*Summary.ts`: plan tipi özetleri
+- `src/pdf/createLoanPdfHtml.ts`: PDF HTML üretimi
+- `src/storage/calculatorStorage.ts`: form, geçmiş ve PDF tercihleri saklama
+- `src/ads/*`: AdMob config ve interstitial akışı
+
+## Release Öncesi Önerilen Kontrol
+
+```bash
+npm run typecheck
+npm run test:ci
+npx eslint components/LoanCalculator.js components/LoanResult.js
+```
+
+Ardından gerçek cihazda en az şu akışlar manuel kontrol edilmelidir:
+
+- Standart sabit taksitli hesaplama
+- Peşin faiz ödemeli hesaplama
+- Eşit anapara hesaplama
+- Özel / balon ödeme hesaplama
+- Anapara ödemesiz dönemli hesaplama
+- Artan taksitli hesaplama
+- PDF oluşturma
+- Paylaşım
+- Geçmişten hesaplama açma
+- Reklam hazır / hazır değil senaryoları
