@@ -3,7 +3,8 @@ import { formatDate } from '../utils/dateMath';
 import type { LoanCalculationResult } from '../domain/loan/types';
 import { formatCustomPaymentsSummary } from '../domain/loan/customPaymentForm';
 import {
-  getFirstIncreasedInstallmentAmount,
+  DECREASING_INSTALLMENT_PLAN_LABEL,
+  getFirstChangedInstallmentAmount,
   INCREASING_INSTALLMENT_PLAN_LABEL,
 } from '../domain/loan/increasingInstallmentSummary';
 import {
@@ -37,6 +38,8 @@ const getPlanTypeLabel = (result: LoanCalculationResult): string =>
         ? INTEREST_ONLY_PLAN_LABEL
       : result.planType === 'increasingInstallment'
         ? INCREASING_INSTALLMENT_PLAN_LABEL
+      : result.planType === 'decreasingInstallment'
+        ? DECREASING_INSTALLMENT_PLAN_LABEL
       : 'Standart Sabit Taksitli';
 
 const formatPercent = (
@@ -59,6 +62,10 @@ export const createLoanPdfHtml = (
   const isCustomPayment = result.planType === 'customPayment';
   const isInterestOnly = result.planType === 'interestOnly';
   const isIncreasingInstallment = result.planType === 'increasingInstallment';
+  const isDecreasingInstallment = result.planType === 'decreasingInstallment';
+  const isProgressiveInstallment =
+    isIncreasingInstallment || isDecreasingInstallment;
+  const progressiveLabel = isIncreasingInstallment ? 'Artış' : 'Azalış';
   const interestOnlyPeriodInstallment =
     getInterestOnlyPeriodInstallmentAmount(result);
   const interestOnlyEffectiveInstallmentInfo =
@@ -156,24 +163,24 @@ export const createLoanPdfHtml = (
                   <div class="box"><div class="label">Son Taksit</div><div class="value">${formatCurrency(
                     result.lastInstallmentAmount ?? 0
                   )}</div></div>`
-              : isIncreasingInstallment
-                ? `<div class="box"><div class="label">Taksit Artış Oranı</div><div class="value">${formatPercent(
+              : isProgressiveInstallment
+                ? `<div class="box"><div class="label">Taksit ${progressiveLabel} Oranı</div><div class="value">${formatPercent(
                     result.installmentIncreaseRatePercent ?? 0
                   )}</div></div>
-                  <div class="box"><div class="label">Artış Sıklığı</div><div class="value">${
+                  <div class="box"><div class="label">${progressiveLabel} Sıklığı</div><div class="value">${
                     result.installmentIncreaseFrequencyMonths ?? 12
                   } ay</div></div>
-                  <div class="box"><div class="label">Artış Başlangıç Taksiti</div><div class="value">${
+                  <div class="box"><div class="label">${progressiveLabel} Başlangıç Taksiti</div><div class="value">${
                     result.installmentIncreaseStartNo ?? 1
                   }. taksit</div></div>
-                  <div class="box"><div class="label">Artış Bitiş Taksiti</div><div class="value">${
+                  <div class="box"><div class="label">${progressiveLabel} Bitiş Taksiti</div><div class="value">${
                     result.installmentIncreaseEndNo ?? result.input.term
                   }. taksit</div></div>
                   <div class="box"><div class="label">İlk Taksit</div><div class="value">${formatCurrency(
                     result.firstInstallmentAmount ?? result.firstInstallment
                   )}</div></div>
-                  <div class="box"><div class="label">İlk Artış Sonrası Taksit</div><div class="value">${formatCurrency(
-                    getFirstIncreasedInstallmentAmount(result)
+                  <div class="box"><div class="label">İlk ${progressiveLabel} Sonrası Taksit</div><div class="value">${formatCurrency(
+                    getFirstChangedInstallmentAmount(result)
                   )}</div></div>
                   <div class="box"><div class="label">Son Taksit</div><div class="value">${formatCurrency(
                     result.lastInstallmentAmount ?? 0
@@ -181,7 +188,7 @@ export const createLoanPdfHtml = (
             : `<div class="box"><div class="label">${isPrepaidInterest ? 'Aylık taksit' : 'Standart aylık taksit'}</div><div class="value">${formatCurrency(result.standardInstallment)}</div></div>`
         }
         ${
-          isIncreasingInstallment
+          isProgressiveInstallment
             ? ''
             : `<div class="box"><div class="label">İlk taksit tutarı</div><div class="value">${formatCurrency(result.firstInstallment)}</div></div>`
         }

@@ -4,7 +4,8 @@ export type LoanPlanType =
   | 'equalPrincipal'
   | 'customPayment'
   | 'interestOnly'
-  | 'increasingInstallment';
+  | 'increasingInstallment'
+  | 'decreasingInstallment';
 
 export type LoanInput = {
   principal: number;
@@ -41,6 +42,7 @@ export type PaymentScheduleItem = {
   isCustomPayment?: boolean;
   isInterestOnly?: boolean;
   isIncreasingInstallment?: boolean;
+  isDecreasingInstallment?: boolean;
 };
 
 export type BrokenPeriodInfo = {

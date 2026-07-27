@@ -30,7 +30,10 @@ import {
   parseInstallmentIncreaseFrequencyMonths,
   parseInstallmentIncreaseRatePercent,
 } from '../src/domain/loan/increasingInstallmentForm';
-import { INCREASING_INSTALLMENT_PLAN_LABEL } from '../src/domain/loan/increasingInstallmentSummary';
+import {
+  DECREASING_INSTALLMENT_PLAN_LABEL,
+  INCREASING_INSTALLMENT_PLAN_LABEL,
+} from '../src/domain/loan/increasingInstallmentSummary';
 import { parseInterestOnlyInstallmentCount } from '../src/domain/loan/interestOnlyForm';
 import { INTEREST_ONLY_PLAN_LABEL } from '../src/domain/loan/interestOnlySummary';
 import { buildLoanShareMessage } from '../src/domain/loan/shareSummary';
@@ -61,7 +64,11 @@ const PLAN_TYPE_LABELS = {
   customPayment: 'Özel / Balon Ödeme Planı',
   interestOnly: INTEREST_ONLY_PLAN_LABEL,
   increasingInstallment: INCREASING_INSTALLMENT_PLAN_LABEL,
+  decreasingInstallment: DECREASING_INSTALLMENT_PLAN_LABEL,
 };
+
+const isProgressiveInstallmentPlanType = (type) =>
+  type === 'increasingInstallment' || type === 'decreasingInstallment';
 
 const createCustomPaymentRow = () => ({
   id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
@@ -345,19 +352,23 @@ const LoanCalculator = () => {
             termCount.value
           )
         : undefined;
+    const isProgressiveInstallmentPlan =
+      isProgressiveInstallmentPlanType(planType);
+    const progressionLabel =
+      planType === 'decreasingInstallment' ? 'Azalış' : 'Artış';
     const parsedInstallmentIncreaseRatePercent =
-      planType === 'increasingInstallment'
+      isProgressiveInstallmentPlan
         ? parseInstallmentIncreaseRatePercent(installmentIncreaseRatePercent)
         : undefined;
     const parsedInstallmentIncreaseFrequencyMonths =
-      planType === 'increasingInstallment'
+      isProgressiveInstallmentPlan
         ? parseInstallmentIncreaseFrequencyMonths(
             installmentIncreaseFrequencyMonths,
             termCount.value
           )
         : undefined;
     const parsedInstallmentIncreaseStartNo =
-      planType === 'increasingInstallment'
+      isProgressiveInstallmentPlan
         ? parseInstallmentIncreaseBoundary(
             installmentIncreaseStartNo,
             termCount.value,
@@ -365,7 +376,7 @@ const LoanCalculator = () => {
           )
         : undefined;
     const parsedInstallmentIncreaseEndNo =
-      planType === 'increasingInstallment'
+      isProgressiveInstallmentPlan
         ? parseInstallmentIncreaseBoundary(
             installmentIncreaseEndNo || String(termCount.value),
             termCount.value,
@@ -374,10 +385,12 @@ const LoanCalculator = () => {
         : undefined;
 
     if (
-      planType === 'increasingInstallment' &&
+      isProgressiveInstallmentPlan &&
       parsedInstallmentIncreaseStartNo > parsedInstallmentIncreaseEndNo
     ) {
-      throw new Error('Artış başlangıç taksiti bitiş taksitinden büyük olamaz.');
+      throw new Error(
+        `${progressionLabel} başlangıç taksiti bitiş taksitinden büyük olamaz.`
+      );
     }
     const customPayments =
       planType === 'customPayment'
@@ -433,21 +446,23 @@ const LoanCalculator = () => {
             recentCalculation.summary.term
           )
         : undefined;
+    const isRecentProgressiveInstallmentPlan =
+      isProgressiveInstallmentPlanType(recentPlanType);
     const installmentIncreaseRatePercent =
-      recentPlanType === 'increasingInstallment'
+      isRecentProgressiveInstallmentPlan
         ? parseInstallmentIncreaseRatePercent(
             recentCalculation.form.installmentIncreaseRatePercent ?? ''
           )
         : undefined;
     const installmentIncreaseFrequencyMonths =
-      recentPlanType === 'increasingInstallment'
+      isRecentProgressiveInstallmentPlan
         ? parseInstallmentIncreaseFrequencyMonths(
             recentCalculation.form.installmentIncreaseFrequencyMonths ?? '12',
             recentCalculation.summary.term
           )
         : undefined;
     const installmentIncreaseStartNo =
-      recentPlanType === 'increasingInstallment'
+      isRecentProgressiveInstallmentPlan
         ? parseInstallmentIncreaseBoundary(
             recentCalculation.form.installmentIncreaseStartNo ?? '1',
             recentCalculation.summary.term,
@@ -455,7 +470,7 @@ const LoanCalculator = () => {
           )
         : undefined;
     const installmentIncreaseEndNo =
-      recentPlanType === 'increasingInstallment'
+      isRecentProgressiveInstallmentPlan
         ? parseInstallmentIncreaseBoundary(
             recentCalculation.form.installmentIncreaseEndNo ??
               String(recentCalculation.summary.term),
@@ -731,7 +746,7 @@ const LoanCalculator = () => {
       )}`;
     }
 
-    if (recentPlanType === 'increasingInstallment') {
+    if (isProgressiveInstallmentPlanType(recentPlanType)) {
       return `İlk / Son ${formatCurrency(
         recentCalculation.summary.firstInstallmentAmount ??
           recentCalculation.summary.firstInstallment
@@ -765,12 +780,15 @@ const LoanCalculator = () => {
       } anapara ödemesiz`;
     }
 
-    if (recentPlanType === 'increasingInstallment') {
+    if (isProgressiveInstallmentPlanType(recentPlanType)) {
+      const progressionName =
+        recentPlanType === 'increasingInstallment' ? 'artış' : 'azalış';
+
       return ` · %${
         recentCalculation.form.installmentIncreaseRatePercent ??
         recentCalculation.summary.installmentIncreaseRatePercent ??
         0
-      } artış · ${
+      } ${progressionName} · ${
         recentCalculation.form.installmentIncreaseFrequencyMonths ??
         recentCalculation.summary.installmentIncreaseFrequencyMonths ??
         12
@@ -877,7 +895,10 @@ const LoanCalculator = () => {
 	              value={term}
 	              onChangeText={(value) => {
 	                setTerm(value);
-	                if (planType === 'increasingInstallment' && !installmentIncreaseEndNo) {
+	                if (
+	                  isProgressiveInstallmentPlanType(planType) &&
+	                  !installmentIncreaseEndNo
+	                ) {
 	                  setInstallmentIncreaseEndNo(value);
 	                }
 	                clearResult();
@@ -931,7 +952,7 @@ const LoanCalculator = () => {
 	                      if (type === 'customPayment' && customPaymentRows.length === 0) {
 	                        setCustomPaymentRows([createCustomPaymentRow()]);
 	                      }
-                      if (type === 'increasingInstallment') {
+                      if (isProgressiveInstallmentPlanType(type)) {
                         setInstallmentIncreaseStartNo((currentValue) => currentValue || '1');
                         setInstallmentIncreaseEndNo((currentValue) => currentValue || term);
                       }
@@ -979,9 +1000,11 @@ const LoanCalculator = () => {
               </>
             ) : null}
 
-            {planType === 'increasingInstallment' ? (
+            {isProgressiveInstallmentPlanType(planType) ? (
               <>
-                <Text style={styles.label}>Taksit Artış Oranı (%)</Text>
+                <Text style={styles.label}>
+                  Taksit {planType === 'increasingInstallment' ? 'Artış' : 'Azalış'} Oranı (%)
+                </Text>
                 <TextInput
                   style={styles.textInput}
                   value={installmentIncreaseRatePercent}
@@ -991,7 +1014,9 @@ const LoanCalculator = () => {
                   keyboardType="decimal-pad"
                   returnKeyType="done"
                 />
-                <Text style={styles.label}>Artış Sıklığı (Ay)</Text>
+                <Text style={styles.label}>
+                  {planType === 'increasingInstallment' ? 'Artış' : 'Azalış'} Sıklığı (Ay)
+                </Text>
                 <TextInput
                   style={styles.textInput}
                   value={installmentIncreaseFrequencyMonths}
@@ -1001,7 +1026,9 @@ const LoanCalculator = () => {
                   keyboardType="number-pad"
                   returnKeyType="done"
                 />
-                <Text style={styles.label}>Artış Aralığı Başlangıcı</Text>
+                <Text style={styles.label}>
+                  {planType === 'increasingInstallment' ? 'Artış' : 'Azalış'} Aralığı Başlangıcı
+                </Text>
                 <TextInput
                   style={styles.textInput}
                   value={installmentIncreaseStartNo}
@@ -1011,7 +1038,9 @@ const LoanCalculator = () => {
                   keyboardType="number-pad"
                   returnKeyType="done"
                 />
-                <Text style={styles.label}>Artış Aralığı Bitişi</Text>
+                <Text style={styles.label}>
+                  {planType === 'increasingInstallment' ? 'Artış' : 'Azalış'} Aralığı Bitişi
+                </Text>
                 <TextInput
                   style={styles.textInput}
                   value={installmentIncreaseEndNo}

@@ -17,9 +17,19 @@ export const ADMOB_INTERSTITIAL_IDS: Record<SupportedAdPlatform, string> = {
   android: 'ca-app-pub-7640689562014954/9816025277',
 };
 
+export const ADMOB_BANNER_IDS: Record<SupportedAdPlatform, string> = {
+  ios: 'ca-app-pub-7640689562014954/4848977897',
+  android: 'ca-app-pub-7640689562014954/9522454141',
+};
+
 export const ADMOB_TEST_INTERSTITIAL_IDS: Record<SupportedAdPlatform, string> = {
   ios: 'ca-app-pub-3940256099942544/4411468910',
   android: 'ca-app-pub-3940256099942544/1033173712',
+};
+
+export const ADMOB_TEST_BANNER_IDS: Record<SupportedAdPlatform, string> = {
+  ios: 'ca-app-pub-3940256099942544/2934735716',
+  android: 'ca-app-pub-3940256099942544/6300978111',
 };
 
 const isSupportedAdPlatform = (platform: PlatformOSType): platform is SupportedAdPlatform => {
@@ -46,6 +56,18 @@ export const getInterstitialAdUnitId = (): string => {
   const adUnitId = isDevelopmentAdMode()
     ? ADMOB_TEST_INTERSTITIAL_IDS[Platform.OS]
     : ADMOB_INTERSTITIAL_IDS[Platform.OS];
+
+  return isUsableAdUnitId(adUnitId) ? adUnitId : '';
+};
+
+export const getBannerAdUnitId = (): string => {
+  if (!isSupportedAdPlatform(Platform.OS)) {
+    return '';
+  }
+
+  const adUnitId = isDevelopmentAdMode()
+    ? ADMOB_TEST_BANNER_IDS[Platform.OS]
+    : ADMOB_BANNER_IDS[Platform.OS];
 
   return isUsableAdUnitId(adUnitId) ? adUnitId : '';
 };

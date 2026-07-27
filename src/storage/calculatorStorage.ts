@@ -144,15 +144,19 @@ const deserializeForm = (
     ),
     installmentIncreaseFrequencyMonths: String(
       form.installmentIncreaseFrequencyMonths ??
-        (normalizePlanType(form.planType) === 'increasingInstallment' ? '12' : '')
+        (isProgressiveInstallmentPlanType(normalizePlanType(form.planType))
+          ? '12'
+          : '')
     ),
     installmentIncreaseStartNo: String(
       form.installmentIncreaseStartNo ??
-        (normalizePlanType(form.planType) === 'increasingInstallment' ? '1' : '')
+        (isProgressiveInstallmentPlanType(normalizePlanType(form.planType))
+          ? '1'
+          : '')
     ),
     installmentIncreaseEndNo: String(
       form.installmentIncreaseEndNo ??
-        (normalizePlanType(form.planType) === 'increasingInstallment'
+        (isProgressiveInstallmentPlanType(normalizePlanType(form.planType))
           ? form.term ?? ''
           : '')
     ),
@@ -166,13 +170,17 @@ const normalizePlanType = (planType: unknown): LoanPlanType => {
     planType === 'equalPrincipal' ||
     planType === 'customPayment' ||
     planType === 'interestOnly' ||
-    planType === 'increasingInstallment'
+    planType === 'increasingInstallment' ||
+    planType === 'decreasingInstallment'
   ) {
     return planType;
   }
 
   return 'standard';
 };
+
+const isProgressiveInstallmentPlanType = (planType: LoanPlanType): boolean =>
+  planType === 'increasingInstallment' || planType === 'decreasingInstallment';
 
 const deserializeCustomPayments = (
   value: unknown
@@ -227,17 +235,17 @@ const deserializeRecentCalculation = (
         Number(item.summary.installmentIncreaseRatePercent) || 0,
       installmentIncreaseFrequencyMonths:
         Number(item.summary.installmentIncreaseFrequencyMonths) ||
-        (normalizePlanType(item.summary.planType) === 'increasingInstallment'
+        (isProgressiveInstallmentPlanType(normalizePlanType(item.summary.planType))
           ? 12
           : 0),
       installmentIncreaseStartNo:
         Number(item.summary.installmentIncreaseStartNo) ||
-        (normalizePlanType(item.summary.planType) === 'increasingInstallment'
+        (isProgressiveInstallmentPlanType(normalizePlanType(item.summary.planType))
           ? 1
           : 0),
       installmentIncreaseEndNo:
         Number(item.summary.installmentIncreaseEndNo) ||
-        (normalizePlanType(item.summary.planType) === 'increasingInstallment'
+        (isProgressiveInstallmentPlanType(normalizePlanType(item.summary.planType))
           ? Number(item.summary.term) || 0
           : 0),
       baseInstallmentAmount: Number(item.summary.baseInstallmentAmount) || 0,

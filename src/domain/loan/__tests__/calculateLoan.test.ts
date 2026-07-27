@@ -172,6 +172,23 @@ const expectIncreasingInstallmentInvariants = (
   expectResultTotalsToMatchSchedule(result);
 };
 
+const expectDecreasingInstallmentInvariants = (
+  result: ReturnType<typeof calculateLoan>,
+  principal: number,
+  term: number
+) => {
+  const lastRow = result.schedule[result.schedule.length - 1];
+
+  expect(result.planType).toBe('decreasingInstallment');
+  expect(result.schedule).toHaveLength(term);
+  expect(result.schedule.some((item) => item.installmentNumber === 0)).toBe(false);
+  expect(result.schedule.every((item) => item.principal > 0)).toBe(true);
+  expect(result.schedule.every((item) => item.remainingPrincipal >= 0)).toBe(true);
+  expect(lastRow.remainingPrincipal).toBe(0);
+  expect(result.totalPrincipal).toBe(principal);
+  expectResultTotalsToMatchSchedule(result);
+};
+
 describe('calculateLoan', () => {
   it('generates a standard equal installment schedule', () => {
     const result = calculateLoan(baseInput);
@@ -2229,6 +2246,207 @@ describe('calculateLoan', () => {
       expectIncreasingInstallmentInvariants(tenPercentResult, 1000000, 60);
       expect(fivePercentResult.totalPayment).toBeCloseTo(2291593.08, 0.05);
       expect(tenPercentResult.totalPayment).toBeCloseTo(2368681.19, 0.05);
+    });
+  });
+
+  describe('decreasing installment plan', () => {
+    const decreasingBaseInput = {
+      creditUsageDate: new Date(2026, 5, 24),
+      firstInstallmentDate: new Date(2026, 6, 24),
+      planType: 'decreasingInstallment' as const,
+    };
+
+    it('calculates a tax-free decreasing case with visible six-month blocks', () => {
+      const result = calculateLoan({
+        ...decreasingBaseInput,
+        principal: 100000,
+        term: 24,
+        monthlyInterestRatePercent: 2,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+        installmentIncreaseRatePercent: 5,
+        installmentIncreaseFrequencyMonths: 6,
+        installmentIncreaseStartNo: 1,
+        installmentIncreaseEndNo: 24,
+      });
+
+      expectDecreasingInstallmentInvariants(result, 100000, 24);
+      expect(result.installmentIncreaseRatePercent).toBe(5);
+      expect(result.installmentIncreaseFrequencyMonths).toBe(6);
+      expect(result.installmentIncreaseStartNo).toBe(1);
+      expect(result.installmentIncreaseEndNo).toBe(24);
+      expect(result.schedule[0].installment).toBe(result.baseInstallmentAmount);
+      expect(result.schedule.slice(0, 6).every((item) => item.installment === result.schedule[0].installment)).toBe(true);
+      expect(result.schedule.slice(6, 12).every((item) => item.installment === result.schedule[6].installment)).toBe(true);
+      expect(result.schedule.slice(12, 18).every((item) => item.installment === result.schedule[12].installment)).toBe(true);
+      expect(result.schedule.slice(18, 23).every((item) => item.installment === result.schedule[18].installment)).toBe(true);
+      expect(result.schedule[6].installment).toBeCloseTo(
+        (result.baseInstallmentAmount ?? 0) * 0.95,
+        1
+      );
+      expect(result.schedule[12].installment).toBeCloseTo(
+        result.schedule[6].installment * 0.95,
+        1
+      );
+      expect(result.schedule[18].installment).toBeCloseTo(
+        result.schedule[12].installment * 0.95,
+        1
+      );
+      expect(result.schedule[0].installment).toBeGreaterThan(
+        result.schedule[18].installment
+      );
+      expect(result.schedule.slice(0, 23).every((item) => item.isDecreasingInstallment)).toBe(true);
+      expect(result.schedule[23].remainingPrincipal).toBe(0);
+    });
+
+    it('applies decreases only inside the selected installment range', () => {
+      const result = calculateLoan({
+        ...decreasingBaseInput,
+        principal: 1000000,
+        term: 60,
+        monthlyInterestRatePercent: 3.1,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+        installmentIncreaseRatePercent: 5,
+        installmentIncreaseFrequencyMonths: 6,
+        installmentIncreaseStartNo: 12,
+        installmentIncreaseEndNo: 48,
+      });
+
+      expectDecreasingInstallmentInvariants(result, 1000000, 60);
+      expect(result.schedule.slice(0, 17).every((item) => item.installment === result.schedule[0].installment)).toBe(true);
+      expect(result.schedule.slice(17, 23).every((item) => item.installment === result.schedule[17].installment)).toBe(true);
+      expect(result.schedule[17].installment).toBeCloseTo(
+        (result.baseInstallmentAmount ?? 0) * 0.95,
+        1
+      );
+      expect(result.schedule[23].installment).toBeCloseTo(
+        result.schedule[17].installment * 0.95,
+        1
+      );
+      expect(result.schedule[29].installment).toBeCloseTo(
+        result.schedule[23].installment * 0.95,
+        1
+      );
+      expect(result.schedule[35].installment).toBeCloseTo(
+        result.schedule[29].installment * 0.95,
+        1
+      );
+      expect(result.schedule[41].installment).toBeCloseTo(
+        result.schedule[35].installment * 0.95,
+        1
+      );
+      expect(result.schedule.slice(47, 59).every((item) => item.installment === result.schedule[47].installment)).toBe(true);
+      expect(result.schedule[59].remainingPrincipal).toBe(0);
+    });
+
+    it('keeps taxed decreasing totals consistent with schedule rows', () => {
+      const result = calculateLoan({
+        ...decreasingBaseInput,
+        principal: 120000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 15,
+        bsmvRatePercent: 15,
+        installmentIncreaseRatePercent: 4,
+        installmentIncreaseFrequencyMonths: 3,
+        installmentIncreaseStartNo: 1,
+        installmentIncreaseEndNo: 12,
+      });
+
+      expectDecreasingInstallmentInvariants(result, 120000, 12);
+      expect(result.totalKkdf).toBeGreaterThan(0);
+      expect(result.totalBsmv).toBeGreaterThan(0);
+      expect(result.schedule[0].installment).toBeGreaterThan(
+        result.schedule[3].installment
+      );
+    });
+
+    it('applies broken period only to the first decreasing installment', () => {
+      const regularResult = calculateLoan({
+        ...decreasingBaseInput,
+        principal: 120000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+        installmentIncreaseRatePercent: 5,
+        installmentIncreaseFrequencyMonths: 3,
+        installmentIncreaseStartNo: 1,
+        installmentIncreaseEndNo: 12,
+      });
+      const brokenResult = calculateLoan({
+        ...decreasingBaseInput,
+        principal: 120000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+        firstInstallmentDate: new Date(2026, 7, 24),
+        installmentIncreaseRatePercent: 5,
+        installmentIncreaseFrequencyMonths: 3,
+        installmentIncreaseStartNo: 1,
+        installmentIncreaseEndNo: 12,
+      });
+
+      expectDecreasingInstallmentInvariants(brokenResult, 120000, 12);
+      expect(brokenResult.brokenPeriod.diffDays).toBe(31);
+      expect(brokenResult.schedule[0].interest).toBeGreaterThan(
+        regularResult.schedule[0].interest
+      );
+      expect(brokenResult.schedule[3].installment).toBeCloseTo(
+        brokenResult.schedule[0].installment * 0.95,
+        0
+      );
+    });
+
+    it('rejects invalid decreasing installment inputs', () => {
+      const commonInput = {
+        ...decreasingBaseInput,
+        principal: 100000,
+        term: 12,
+        monthlyInterestRatePercent: 3,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+      };
+
+      expect(() => calculateLoan(commonInput)).toThrow('azalış oranı girilmelidir');
+      expect(() =>
+        calculateLoan({ ...commonInput, installmentIncreaseRatePercent: 0 })
+      ).toThrow('pozitif');
+      expect(() =>
+        calculateLoan({ ...commonInput, installmentIncreaseRatePercent: -1 })
+      ).toThrow('pozitif');
+      expect(() =>
+        calculateLoan({ ...commonInput, installmentIncreaseRatePercent: 100 })
+      ).toThrow('%100');
+      expect(() =>
+        calculateLoan({
+          ...commonInput,
+          installmentIncreaseRatePercent: 5,
+          installmentIncreaseFrequencyMonths: 2.5,
+          installmentIncreaseStartNo: 1,
+          installmentIncreaseEndNo: 12,
+        })
+      ).toThrow('Azalış sıklığı tam sayı');
+      expect(() =>
+        calculateLoan({
+          ...commonInput,
+          installmentIncreaseRatePercent: 5,
+          installmentIncreaseFrequencyMonths: 12,
+          installmentIncreaseStartNo: 8,
+          installmentIncreaseEndNo: 6,
+        })
+      ).toThrow('Azalış başlangıç taksiti bitiş');
+      expect(() =>
+        calculateLoan({
+          ...commonInput,
+          installmentIncreaseRatePercent: 5,
+          installmentIncreaseFrequencyMonths: 12,
+          installmentIncreaseStartNo: 1,
+          installmentIncreaseEndNo: 13,
+        })
+      ).toThrow('Azalış bitiş taksiti vadeden büyük');
     });
   });
 

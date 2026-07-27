@@ -338,4 +338,41 @@ describe('createLoanPdfHtml', () => {
     expect(html).toContain(formatCurrency(result.totalPayment));
     expect(html).not.toContain('Standart aylık taksit');
   });
+
+  it('renders decreasing installment plan details without standard installment wording', () => {
+    const result = calculateLoan({
+      principal: 100000,
+      term: 24,
+      monthlyInterestRatePercent: 2,
+      kkdfRatePercent: 0,
+      bsmvRatePercent: 0,
+      creditUsageDate: new Date(2026, 5, 24),
+      firstInstallmentDate: new Date(2026, 6, 24),
+      planType: 'decreasingInstallment',
+      installmentIncreaseRatePercent: 5,
+      installmentIncreaseFrequencyMonths: 12,
+      installmentIncreaseStartNo: 1,
+      installmentIncreaseEndNo: 12,
+    });
+    const html = createLoanPdfHtml(result);
+
+    expect(html).toContain('Azalan Taksitli Plan');
+    expect(html).toContain('Taksit Azalış Oranı');
+    expect(html).toContain('%5');
+    expect(html).toContain('Azalış Sıklığı');
+    expect(html).toContain('12 ay');
+    expect(html).toContain('Azalış Başlangıç Taksiti');
+    expect(html).toContain('1. taksit');
+    expect(html).toContain('Azalış Bitiş Taksiti');
+    expect(html).toContain('12. taksit');
+    expect(html).toContain('İlk Taksit');
+    expect(html).toContain(formatCurrency(result.firstInstallmentAmount ?? 0));
+    expect(html).toContain('İlk Azalış Sonrası Taksit');
+    expect(html).toContain(formatCurrency(result.schedule[12].installment));
+    expect(html).not.toContain('İlk taksit tutarı');
+    expect(html).toContain('Son Taksit');
+    expect(html).toContain(formatCurrency(result.lastInstallmentAmount ?? 0));
+    expect(html).toContain(formatCurrency(result.totalPayment));
+    expect(html).not.toContain('Standart aylık taksit');
+  });
 });

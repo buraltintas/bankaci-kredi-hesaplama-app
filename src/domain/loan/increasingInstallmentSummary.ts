@@ -1,11 +1,15 @@
 import type { LoanCalculationResult } from './types';
 
 export const INCREASING_INSTALLMENT_PLAN_LABEL = 'Artan Taksitli Plan';
+export const DECREASING_INSTALLMENT_PLAN_LABEL = 'Azalan Taksitli Plan';
 
-export const getFirstIncreasedInstallmentAmount = (
+export const getFirstChangedInstallmentAmount = (
   result: LoanCalculationResult
 ): number => {
-  if (result.planType !== 'increasingInstallment') {
+  if (
+    result.planType !== 'increasingInstallment' &&
+    result.planType !== 'decreasingInstallment'
+  ) {
     return 0;
   }
 
@@ -20,3 +24,6 @@ export const getFirstIncreasedInstallmentAmount = (
     result.firstInstallment
   );
 };
+
+export const getFirstIncreasedInstallmentAmount =
+  getFirstChangedInstallmentAmount;

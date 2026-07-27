@@ -3,11 +3,13 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ViewShot from 'react-native-view-shot';
 import { Feather } from '@expo/vector-icons';
 import { colors, radius, shadows, spacing, typography } from '../src/design/tokens';
+import ResultBannerAd from './AdBanner';
 import { formatCurrency } from '../src/utils/formatCurrency';
 import { formatDate } from '../src/utils/dateMath';
 import { formatCustomPaymentsSummary } from '../src/domain/loan/customPaymentForm';
 import {
-  getFirstIncreasedInstallmentAmount,
+  DECREASING_INSTALLMENT_PLAN_LABEL,
+  getFirstChangedInstallmentAmount,
   INCREASING_INSTALLMENT_PLAN_LABEL,
 } from '../src/domain/loan/increasingInstallmentSummary';
 import {
@@ -23,6 +25,7 @@ const PLAN_TYPE_LABELS = {
   customPayment: 'Özel / Balon Ödeme Planı',
   interestOnly: INTEREST_ONLY_PLAN_LABEL,
   increasingInstallment: INCREASING_INSTALLMENT_PLAN_LABEL,
+  decreasingInstallment: DECREASING_INSTALLMENT_PLAN_LABEL,
 };
 
 const formatPercent = (value, fractionDigits = 4, minimumFractionDigits = 0) =>
@@ -77,12 +80,16 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
   const isCustomPayment = result.planType === 'customPayment';
   const isInterestOnly = result.planType === 'interestOnly';
   const isIncreasingInstallment = result.planType === 'increasingInstallment';
+  const isDecreasingInstallment = result.planType === 'decreasingInstallment';
+  const isProgressiveInstallment =
+    isIncreasingInstallment || isDecreasingInstallment;
+  const progressiveLabel = isIncreasingInstallment ? 'Artış' : 'Azalış';
   const interestOnlyPeriodInstallment = getInterestOnlyPeriodInstallmentAmount(result);
   const interestOnlyEffectiveInstallmentInfo =
     getInterestOnlyEffectiveInstallmentInfo(result);
   const heroLabel = isCustomPayment
     ? 'Otomatik Taksit'
-    : isIncreasingInstallment
+    : isProgressiveInstallment
       ? 'İlk Taksit / Son Taksit'
     : isInterestOnly
       ? 'Sonraki Dönem Taksiti'
@@ -91,7 +98,7 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
       : 'Aylık Taksit';
   const heroValue = isCustomPayment
     ? formatCurrency(result.automaticInstallmentAmount ?? 0)
-    : isIncreasingInstallment
+    : isProgressiveInstallment
       ? `${formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)} / ${formatCurrency(
           result.lastInstallmentAmount ?? result.firstInstallment
         )}`
@@ -104,10 +111,12 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
     : formatCurrency(result.standardInstallment);
   const heroSubValue = isCustomPayment
     ? `${result.input.customPayments?.length ?? 0} özel ödeme`
-    : isIncreasingInstallment
+    : isProgressiveInstallment
 	    ? `Taksitler her ${
 	        result.installmentIncreaseFrequencyMonths ?? 12
-	      } ayda bir %${result.installmentIncreaseRatePercent ?? 0} oranında artar · ${
+	      } ayda bir %${result.installmentIncreaseRatePercent ?? 0} oranında ${
+          isIncreasingInstallment ? 'artar' : 'azalır'
+        } · ${
 	        result.installmentIncreaseStartNo ?? 1
 	      }-${result.installmentIncreaseEndNo ?? result.input.term}. taksit`
     : isInterestOnly
@@ -221,22 +230,22 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
                 />
               </>
             ) : null}
-            {isIncreasingInstallment ? (
+            {isProgressiveInstallment ? (
               <>
                 <SummaryMetric
-                  label="Taksit Artış Oranı"
+                  label={`Taksit ${progressiveLabel} Oranı`}
                   value={`%${result.installmentIncreaseRatePercent ?? 0}`}
                 />
                 <SummaryMetric
-                  label="Artış Sıklığı"
+                  label={`${progressiveLabel} Sıklığı`}
                   value={`${result.installmentIncreaseFrequencyMonths ?? 12} ay`}
                 />
                 <SummaryMetric
-                  label="Artış Başlangıç Taksiti"
+                  label={`${progressiveLabel} Başlangıç Taksiti`}
                   value={`${result.installmentIncreaseStartNo ?? 1}. taksit`}
                 />
                 <SummaryMetric
-                  label="Artış Bitiş Taksiti"
+                  label={`${progressiveLabel} Bitiş Taksiti`}
                   value={`${result.installmentIncreaseEndNo ?? result.input.term}. taksit`}
                 />
                 <SummaryMetric
@@ -244,8 +253,8 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
                   value={formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)}
                 />
                 <SummaryMetric
-                  label="İlk Artış Sonrası Taksit"
-                  value={formatCurrency(getFirstIncreasedInstallmentAmount(result))}
+                  label={`İlk ${progressiveLabel} Sonrası Taksit`}
+                  value={formatCurrency(getFirstChangedInstallmentAmount(result))}
                 />
                 <SummaryMetric
                   label="Son Taksit"
@@ -340,6 +349,8 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
         </TouchableOpacity>
       </View>
 
+      <ResultBannerAd />
+
       <View style={styles.scheduleCard}>
         <TouchableOpacity
           style={styles.scheduleToggle}
@@ -358,10 +369,10 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
                   ? `${result.schedule.length} taksit · ${
                       result.interestOnlyInstallmentCount ?? 0
                     } anapara ödemesiz`
-                : isIncreasingInstallment
+                : isProgressiveInstallment
 	                  ? `${result.schedule.length} taksit · %${
 	                      result.installmentIncreaseRatePercent ?? 0
-	                    } artış · ${
+	                    } ${isIncreasingInstallment ? 'artış' : 'azalış'} · ${
 	                      result.installmentIncreaseFrequencyMonths ?? 12
 	                    } ayda bir · ${
 	                      result.installmentIncreaseStartNo ?? 1

@@ -2,7 +2,10 @@ import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/dateMath';
 import type { LoanCalculationResult, LoanPlanType } from './types';
 import { formatCustomPaymentsSummary } from './customPaymentForm';
-import { INCREASING_INSTALLMENT_PLAN_LABEL } from './increasingInstallmentSummary';
+import {
+  DECREASING_INSTALLMENT_PLAN_LABEL,
+  INCREASING_INSTALLMENT_PLAN_LABEL,
+} from './increasingInstallmentSummary';
 import {
   getInterestOnlyEffectiveInstallmentInfo,
   getInterestOnlyPeriodInstallmentAmount,
@@ -16,6 +19,7 @@ const PLAN_TYPE_LABELS: Record<LoanPlanType, string> = {
   customPayment: 'Özel / Balon Ödeme Planı',
   interestOnly: INTEREST_ONLY_PLAN_LABEL,
   increasingInstallment: INCREASING_INSTALLMENT_PLAN_LABEL,
+  decreasingInstallment: DECREASING_INSTALLMENT_PLAN_LABEL,
 };
 
 const formatDiscountedRate = (value: number | undefined): string =>
@@ -70,6 +74,17 @@ Artış bitiş taksiti: ${result.installmentIncreaseEndNo ?? result.input.term}.
 Son taksit: ${formatCurrency(result.lastInstallmentAmount ?? 0)}
 Toplam ödeme: ${formatCurrency(result.totalPayment)}
 Plan Tipi: ${PLAN_TYPE_LABELS.increasingInstallment}`;
+  }
+
+  if (result.planType === 'decreasingInstallment') {
+    return `Taksit azalış oranı: %${result.installmentIncreaseRatePercent ?? 0}
+Azalış sıklığı: ${result.installmentIncreaseFrequencyMonths ?? 12} ay
+Azalış başlangıç taksiti: ${result.installmentIncreaseStartNo ?? 1}. taksit
+Azalış bitiş taksiti: ${result.installmentIncreaseEndNo ?? result.input.term}. taksit
+İlk taksit: ${formatCurrency(result.firstInstallmentAmount ?? result.firstInstallment)}
+Son taksit: ${formatCurrency(result.lastInstallmentAmount ?? 0)}
+Toplam ödeme: ${formatCurrency(result.totalPayment)}
+Plan Tipi: ${PLAN_TYPE_LABELS.decreasingInstallment}`;
   }
 
   if (result.planType === 'prepaidInterest') {

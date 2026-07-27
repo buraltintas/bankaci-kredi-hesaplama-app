@@ -143,4 +143,32 @@ describe('buildLoanShareMessage', () => {
     expect(message).toContain('Toplam ödeme');
     expect(message).not.toContain('Standart aylık taksit');
   });
+
+  it('renders decreasing installment summary without standard monthly installment wording', () => {
+    const result = calculateLoan({
+      principal: 100000,
+      term: 12,
+      monthlyInterestRatePercent: 2,
+      kkdfRatePercent: 0,
+      bsmvRatePercent: 0,
+      creditUsageDate: new Date(2026, 5, 24),
+      firstInstallmentDate: new Date(2026, 6, 24),
+      planType: 'decreasingInstallment',
+      installmentIncreaseRatePercent: 5,
+      installmentIncreaseFrequencyMonths: 3,
+      installmentIncreaseStartNo: 1,
+      installmentIncreaseEndNo: 12,
+    });
+    const message = buildLoanShareMessage(result);
+
+    expect(message).toContain('Plan Tipi: Azalan Taksitli Plan');
+    expect(message).toContain('Taksit azalış oranı: %5');
+    expect(message).toContain('Azalış sıklığı: 3 ay');
+    expect(message).toContain('Azalış başlangıç taksiti: 1. taksit');
+    expect(message).toContain('Azalış bitiş taksiti: 12. taksit');
+    expect(message).toContain('İlk taksit');
+    expect(message).toContain('Son taksit');
+    expect(message).toContain('Toplam ödeme');
+    expect(message).not.toContain('Standart aylık taksit');
+  });
 });
