@@ -2,7 +2,7 @@
   "expo": {
     "name": "Kredi Hesaplama",
     "slug": "bankaci-kredi-hesaplama",
-    "version": "2.1.1",
+    "version": "2.1.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "myapp",
@@ -14,7 +14,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "6"
+      "buildNumber": "7"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +22,7 @@
         "backgroundColor": "#0B6EF3"
       },
       "package": "com.xewor.bankacikredihesaplama",
-      "versionCode": 8
+      "versionCode": 11
     },
     "web": {
       "bundler": "metro",
