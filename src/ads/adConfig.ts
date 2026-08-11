@@ -1,6 +1,6 @@
 import { Platform, type PlatformOSType } from 'react-native';
 
-export type InterstitialActionName = 'share' | 'pdf';
+export type InterstitialActionName = 'share' | 'pdf' | 'recommendations';
 
 type SupportedAdPlatform = Extract<PlatformOSType, 'ios' | 'android'>;
 

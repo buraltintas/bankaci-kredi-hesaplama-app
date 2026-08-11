@@ -721,6 +721,12 @@ const LoanCalculator = () => {
     });
   };
 
+  const handleOpenRecommendations = async (callback) => {
+    await runActionWithOptionalInterstitial('recommendations', async () => {
+      callback();
+    });
+  };
+
   const getRecentInstallmentSummary = (recentCalculation) => {
     const recentPlanType = recentCalculation.form.planType ?? 'standard';
 
@@ -1475,6 +1481,7 @@ const LoanCalculator = () => {
                 result={result}
                 onShare={handleShare}
                 onSharePdf={handleSharePdf}
+                onOpenRecommendations={handleOpenRecommendations}
                 isActionDisabled={isInterstitialActionRunning}
               />
             </View>

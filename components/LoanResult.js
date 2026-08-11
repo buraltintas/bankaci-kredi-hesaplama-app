@@ -17,6 +17,7 @@ import {
   getInterestOnlyPeriodInstallmentAmount,
   INTEREST_ONLY_PLAN_LABEL,
 } from '../src/domain/loan/interestOnlySummary';
+import { getPaymentPlanRecommendations } from '../src/recommendations/paymentPlanRecommendationEngine';
 
 const PLAN_TYPE_LABELS = {
   standard: 'Standart Sabit Taksitli',
@@ -45,6 +46,27 @@ const SummaryMetric = ({ label, value, highlighted }) => (
   </View>
 );
 
+const RecommendationCard = ({ recommendation }) => (
+  <View style={styles.recommendationCard}>
+    <View style={styles.recommendationHeader}>
+      <View style={styles.recommendationIcon}>
+        <Feather name="git-branch" size={16} color={colors.primary} />
+      </View>
+      <View style={styles.recommendationTitleWrapper}>
+        <Text style={styles.recommendationTitle}>{recommendation.title}</Text>
+        <Text style={styles.recommendationMessage}>{recommendation.message}</Text>
+      </View>
+    </View>
+    <View style={styles.recommendationDetails}>
+      {recommendation.details.map((detail) => (
+        <Text key={detail} style={styles.recommendationDetail}>
+          {detail}
+        </Text>
+      ))}
+    </View>
+  </View>
+);
+
 const ScheduleRow = ({ item }) => (
   <View style={styles.scheduleRow}>
     <View style={styles.scheduleHeader}>
@@ -68,8 +90,16 @@ const ScheduleRow = ({ item }) => (
   </View>
 );
 
-const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled = false }) => {
+const LoanResult = ({
+  resultRef,
+  result,
+  onShare,
+  onSharePdf,
+  onOpenRecommendations = (callback) => callback(),
+  isActionDisabled = false,
+}) => {
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [isRecommendationsOpen, setIsRecommendationsOpen] = useState(false);
   const previewSchedule = useMemo(
     () => (isScheduleOpen ? result.schedule : []),
     [isScheduleOpen, result.schedule]
@@ -87,6 +117,20 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
   const interestOnlyPeriodInstallment = getInterestOnlyPeriodInstallmentAmount(result);
   const interestOnlyEffectiveInstallmentInfo =
     getInterestOnlyEffectiveInstallmentInfo(result);
+  const paymentPlanRecommendations = useMemo(
+    () => getPaymentPlanRecommendations(result),
+    [result]
+  );
+  const handleToggleRecommendations = async () => {
+    if (isRecommendationsOpen) {
+      setIsRecommendationsOpen(false);
+      return;
+    }
+
+    await onOpenRecommendations(() => {
+      setIsRecommendationsOpen(true);
+    });
+  };
   const heroLabel = isCustomPayment
     ? 'Otomatik Taksit'
     : isProgressiveInstallment
@@ -327,6 +371,49 @@ const LoanResult = ({ resultRef, result, onShare, onSharePdf, isActionDisabled =
               </Text>
             </View>
           ) : null}
+
+          {paymentPlanRecommendations.length > 0 ? (
+            <View style={styles.recommendationsBox}>
+              <TouchableOpacity
+                style={styles.recommendationsToggle}
+                onPress={handleToggleRecommendations}
+                disabled={isActionDisabled}
+              >
+                <View style={styles.recommendationsTitleRow}>
+                  <Feather name="layers" size={18} color={colors.primary} />
+                  <View style={styles.recommendationsTitleWrapper}>
+                    <Text style={styles.recommendationsTitle}>
+                      Alternatif Ödeme Planları
+                    </Text>
+                    <Text style={styles.recommendationsToggleHint}>
+                      {isRecommendationsOpen
+                        ? `${paymentPlanRecommendations.length} alternatif gösteriliyor`
+                        : `${paymentPlanRecommendations.length} alternatifi görmek için aç`}
+                    </Text>
+                  </View>
+                </View>
+                <Feather
+                  name={isRecommendationsOpen ? 'chevron-up' : 'chevron-down'}
+                  size={24}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+              {isRecommendationsOpen ? (
+                <>
+                  <Text style={styles.recommendationsDisclaimer}>
+                    Bu öneriler finansal tavsiye değildir; aynı kredi bilgileriyle
+                    hesaplanan matematiksel karşılaştırmalardır.
+                  </Text>
+                  {paymentPlanRecommendations.map((recommendation) => (
+                    <RecommendationCard
+                      key={recommendation.id}
+                      recommendation={recommendation}
+                    />
+                  ))}
+                </>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </ViewShot>
 
@@ -516,6 +603,91 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: '700',
     lineHeight: 18,
+  },
+  recommendationsBox: {
+    backgroundColor: '#F8FBFF',
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  recommendationsToggle: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  recommendationsTitleRow: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  recommendationsTitleWrapper: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  recommendationsTitle: {
+    color: colors.text,
+    flex: 1,
+    fontSize: typography.body,
+    fontWeight: '900',
+  },
+  recommendationsToggleHint: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    fontWeight: '700',
+  },
+  recommendationsDisclaimer: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  recommendationCard: {
+    backgroundColor: colors.surface,
+    borderColor: '#E2EAF2',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  recommendationHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  recommendationIcon: {
+    alignItems: 'center',
+    backgroundColor: '#E7F5FF',
+    borderRadius: radius.sm,
+    height: 28,
+    justifyContent: 'center',
+    width: 28,
+  },
+  recommendationTitleWrapper: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  recommendationTitle: {
+    color: colors.primaryDark,
+    fontSize: typography.small,
+    fontWeight: '900',
+  },
+  recommendationMessage: {
+    color: colors.text,
+    fontSize: typography.small,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  recommendationDetails: {
+    gap: spacing.xs,
+  },
+  recommendationDetail: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
   },
   actions: {
     flexDirection: 'row',

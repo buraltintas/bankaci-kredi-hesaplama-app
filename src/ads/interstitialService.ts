@@ -43,6 +43,13 @@ const logInterstitialDebug = (message: string): void => {
   }
 };
 
+const getActionLogLabel = (actionName: InterstitialActionName): string => {
+  if (actionName === 'pdf') return 'PDF';
+  if (actionName === 'share') return 'Share';
+
+  return 'Recommendations';
+};
+
 const loadGoogleMobileAds = (): GoogleMobileAdsModule | null => {
   if (Constants.appOwnership === 'expo') {
     return null;
@@ -144,7 +151,7 @@ export const runActionWithOptionalInterstitial = async (
 
   try {
     const mobileAds = loadGoogleMobileAds();
-    logInterstitialDebug(`${actionName === 'pdf' ? 'PDF' : 'Share'} pressed`);
+    logInterstitialDebug(`${getActionLogLabel(actionName)} pressed`);
     const canShowAd = ADS_ENABLED && mobileAds && adLoaded && currentAd !== null;
 
     if (canShowAd) {
@@ -203,7 +210,7 @@ export const runActionWithOptionalInterstitial = async (
     }
 
     await callback();
-    logInterstitialDebug('PDF/share action continued');
+    logInterstitialDebug(`${getActionLogLabel(actionName)} action continued`);
   } finally {
     actionInProgress = false;
     preloadInterstitialAd();
