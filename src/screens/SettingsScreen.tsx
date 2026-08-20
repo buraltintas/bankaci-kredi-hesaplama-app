@@ -192,19 +192,19 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: spacing.lg,
+    paddingTop: spacing.md,
   },
   eyebrow: {
-    color: colors.textMuted,
+    color: colors.primary,
     fontSize: typography.small,
-    fontWeight: '700',
-    letterSpacing: 1.2,
+    fontWeight: '800',
+    letterSpacing: 0,
     textTransform: 'uppercase',
   },
   title: {
     color: colors.text,
     fontSize: typography.title,
     fontWeight: '800',
-    marginTop: spacing.xs,
   },
   card: {
     backgroundColor: colors.surface,

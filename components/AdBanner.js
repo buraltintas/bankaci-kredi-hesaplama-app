@@ -77,7 +77,9 @@ const styles = StyleSheet.create({
   removeAdsButton: {
     alignSelf: 'flex-end',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    // Wide gap on purpose: tested on device, a thumb aiming here was landing
+    // on the banner instead. Accidental ad clicks count as invalid traffic.
+    marginBottom: spacing.xl,
     minHeight: 44,
     paddingHorizontal: spacing.sm,
   },

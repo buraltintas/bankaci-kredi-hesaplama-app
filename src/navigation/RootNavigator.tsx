@@ -1,30 +1,30 @@
 import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
-import { colors, spacing, typography } from '../design/tokens';
+import { colors } from '../design/tokens';
 import LoanCalculator from '../../components/LoanCalculator';
+import DepositScreen from '../screens/DepositScreen';
+import AnimatedTabBar from './AnimatedTabBar';
 import SettingsScreen from '../screens/SettingsScreen';
 
 export type RootTabParamList = {
   Loan: undefined;
+  Deposit: undefined;
   Settings: undefined;
 };
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
-const TAB_BAR_MIN_HEIGHT = 60;
-
 const RootNavigator = () => {
   return (
     <Tab.Navigator
+      tabBar={(props) => <AnimatedTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        // Cross-fades the screens instead of cutting between them.
+        animation: 'fade',
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: styles.tabBar,
-        tabBarItemStyle: styles.tabBarItem,
-        tabBarLabelStyle: styles.tabBarLabel,
       }}
     >
       <Tab.Screen
@@ -35,6 +35,17 @@ const RootNavigator = () => {
           tabBarAccessibilityLabel: 'Kredi hesaplama',
           tabBarIcon: ({ color, size }) => (
             <Feather name="percent" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Deposit"
+        component={DepositScreen}
+        options={{
+          title: 'Mevduat',
+          tabBarAccessibilityLabel: 'Mevduat hesaplama',
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="trending-up" size={size} color={color} />
           ),
         }}
       />
@@ -53,22 +64,5 @@ const RootNavigator = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: colors.surface,
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-    minHeight: TAB_BAR_MIN_HEIGHT,
-    paddingTop: spacing.xs,
-  },
-  tabBarItem: {
-    minHeight: 44,
-    paddingVertical: Platform.OS === 'android' ? spacing.xs : 0,
-  },
-  tabBarLabel: {
-    fontSize: typography.small,
-    fontWeight: '700',
-  },
-});
 
 export default RootNavigator;

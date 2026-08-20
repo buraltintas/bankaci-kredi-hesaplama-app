@@ -20,6 +20,7 @@ import { Feather } from '@expo/vector-icons';
 import { LOAN_TYPES } from '../utils/constants';
 import LoanResult from './LoanResult';
 import NumericInput from '../src/components/NumericInput';
+import CalculateActionBar from '../src/components/CalculateActionBar';
 import { colors, radius, shadows, spacing, typography } from '../src/design/tokens';
 import { calculateLoan } from '../src/domain/loan/calculateLoan';
 import {
@@ -188,6 +189,11 @@ const LoanCalculator = () => {
       phone: contactPhone,
     }).catch(() => undefined);
   }, [contactFullName, contactPhone, hasLoadedStoredState, includeContactInfo]);
+
+  const isReadyToCalculate =
+    parseNumericInput(amount, 'money').isValid &&
+    parseNumericInput(term, 'integer').isValid &&
+    parseNumericInput(interestRate, 'decimal').isValid;
 
   const clearResult = () => {
     setResult(null);
@@ -823,7 +829,9 @@ const LoanCalculator = () => {
               paddingTop:
                 spacing.lg + (Platform.OS === 'android' ? insets.top : 0),
               paddingBottom:
-                ACTION_BUTTON_HEIGHT + ACTION_BAR_VERTICAL_PADDING * 3 + tabBarHeight,
+                ACTION_BUTTON_HEIGHT +
+                ACTION_BAR_VERTICAL_PADDING * 3 +
+                tabBarHeight,
             },
           ]}
           automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
@@ -1407,19 +1415,11 @@ const LoanCalculator = () => {
           ) : null}
         </ScrollView>
 
-        <View
-          style={[
-            styles.buttonContainer,
-            { paddingBottom: ACTION_BAR_VERTICAL_PADDING + tabBarHeight },
-          ]}
-        >
-          <TouchableOpacity style={styles.button} onPress={handleCalculate}>
-            <View style={styles.buttonIconBadge}>
-              <Feather name="zap" size={18} color="#FFDD57" />
-            </View>
-            <Text style={styles.buttonText}>Hesapla</Text>
-          </TouchableOpacity>
-        </View>
+        <CalculateActionBar
+          onPress={handleCalculate}
+          isReady={isReadyToCalculate}
+          paddingBottom={ACTION_BAR_VERTICAL_PADDING}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -1778,46 +1778,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.small,
     fontWeight: '700',
-  },
-  buttonContainer: {
-    backgroundColor: colors.surface,
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-    bottom: 0,
-    left: 0,
-    paddingHorizontal: spacing.lg,
-    paddingTop: ACTION_BAR_VERTICAL_PADDING,
-    position: 'absolute',
-    right: 0,
-  },
-  button: {
-    alignItems: 'center',
-    backgroundColor: '#0877E8',
-    borderRadius: radius.md,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    justifyContent: 'center',
-    minHeight: 54,
-    shadowColor: '#0877E8',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    elevation: 4,
-  },
-  buttonIconBadge: {
-    alignItems: 'center',
-    backgroundColor: '#0757B8',
-    borderColor: 'rgba(255, 255, 255, 0.28)',
-    borderRadius: 14,
-    borderWidth: 1,
-    height: 28,
-    justifyContent: 'center',
-    width: 28,
-  },
-  buttonText: {
-    color: colors.surface,
-    fontSize: 17,
-    fontWeight: '800',
   },
 });
 
