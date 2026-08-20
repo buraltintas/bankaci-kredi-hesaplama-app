@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { InteractionManager } from 'react-native';
-import { initializeInterstitialAds, runActionWithOptionalInterstitial } from './interstitialService';
-import type { InterstitialActionName } from './adConfig';
+import {
+  discardPreloadedInterstitial,
+  initializeInterstitialAds,
+  runActionWithOptionalInterstitial,
+} from './interstitialService';
+import { areAdsEnabled, type InterstitialActionName } from './adConfig';
+import { getIsPremium, subscribeToPremium } from '../subscription/premiumStore';
 
 type OptionalAction = () => Promise<void> | void;
 
@@ -10,7 +15,21 @@ export const useInterstitialAction = () => {
   const isRunningRef = useRef(false);
 
   useEffect(() => {
-    void initializeInterstitialAds();
+    const syncWithEntitlement = () => {
+      if (getIsPremium()) {
+        // A purchase may have completed while an ad sat preloaded.
+        discardPreloadedInterstitial();
+        return;
+      }
+
+      if (areAdsEnabled()) {
+        void initializeInterstitialAds();
+      }
+    };
+
+    syncWithEntitlement();
+
+    return subscribeToPremium(syncWithEntitlement);
   }, []);
 
   const runInterstitialAction = useCallback(

@@ -2,13 +2,28 @@ import React, { useEffect, useState } from 'react';
 import { Image, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
-import LoanCalculator from './components/LoanCalculator';
+import { DefaultTheme, NavigationContainer, type Theme } from '@react-navigation/native';
+import RootNavigator from './src/navigation/RootNavigator';
+import { PremiumProvider } from './src/subscription/PremiumProvider';
+import { PaywallProvider } from './src/subscription/PaywallProvider';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 const APP_SPLASH_DURATION_MS = 1200;
 const shouldShowAppSplash = Platform.OS === 'android';
 const appSplashImage = require('./assets/splash.png');
+
+const navigationTheme: Theme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: '#F3F6FA',
+    card: '#FFFFFF',
+    primary: '#0B5CAD',
+    text: '#14213D',
+    border: '#D8E1EA',
+  },
+};
 
 type ErrorBoundaryState = {
   error: Error | null;
@@ -71,22 +86,32 @@ export default function RootApp() {
 
   return (
     <RootErrorBoundary>
-      <SafeAreaProvider>
-        <View style={styles.root}>
-          {Platform.OS === 'android' ? (
-            <StatusBar
-              backgroundColor={showAppSplash ? '#F4FAFF' : '#F3F6FA'}
-              barStyle="dark-content"
-            />
-          ) : null}
-          <LoanCalculator />
-          {showAppSplash ? (
-            <View style={styles.appSplash} pointerEvents="none">
-              <Image source={appSplashImage} style={styles.appSplashImage} resizeMode="cover" />
+      <PremiumProvider>
+        <PaywallProvider>
+          <SafeAreaProvider>
+            <View style={styles.root}>
+              {Platform.OS === 'android' ? (
+                <StatusBar
+                  backgroundColor={showAppSplash ? '#F4FAFF' : '#F3F6FA'}
+                  barStyle="dark-content"
+                />
+              ) : null}
+              <NavigationContainer theme={navigationTheme}>
+                <RootNavigator />
+              </NavigationContainer>
+              {showAppSplash ? (
+                <View style={styles.appSplash} pointerEvents="none">
+                  <Image
+                    source={appSplashImage}
+                    style={styles.appSplashImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              ) : null}
             </View>
-          ) : null}
-        </View>
-      </SafeAreaProvider>
+          </SafeAreaProvider>
+        </PaywallProvider>
+      </PremiumProvider>
     </RootErrorBoundary>
   );
 }

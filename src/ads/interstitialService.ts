@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import {
-  ADS_ENABLED,
   INTERSTITIAL_SHOW_TIMEOUT_MS,
+  areAdsEnabled,
   getInterstitialAdUnitId,
   type InterstitialActionName,
 } from './adConfig';
@@ -70,7 +70,7 @@ const loadGoogleMobileAds = (): GoogleMobileAdsModule | null => {
 };
 
 export const initializeInterstitialAds = async (): Promise<void> => {
-  if (!ADS_ENABLED) return;
+  if (!areAdsEnabled()) return;
   const mobileAds = loadGoogleMobileAds();
   if (!mobileAds) return;
 
@@ -83,7 +83,7 @@ export const initializeInterstitialAds = async (): Promise<void> => {
 };
 
 export const preloadInterstitialAd = (): void => {
-  if (!ADS_ENABLED) return;
+  if (!areAdsEnabled()) return;
   const mobileAds = loadGoogleMobileAds();
   if (!mobileAds) return;
 
@@ -152,7 +152,7 @@ export const runActionWithOptionalInterstitial = async (
   try {
     const mobileAds = loadGoogleMobileAds();
     logInterstitialDebug(`${getActionLogLabel(actionName)} pressed`);
-    const canShowAd = ADS_ENABLED && mobileAds && adLoaded && currentAd !== null;
+    const canShowAd = areAdsEnabled() && mobileAds && adLoaded && currentAd !== null;
 
     if (canShowAd) {
       const ad = currentAd!;
@@ -215,6 +215,16 @@ export const runActionWithOptionalInterstitial = async (
     actionInProgress = false;
     preloadInterstitialAd();
   }
+};
+
+/**
+ * Drops any preloaded ad. Called when the premium entitlement turns on so a
+ * subscriber cannot be shown an ad that was loaded moments earlier.
+ */
+export const discardPreloadedInterstitial = (): void => {
+  currentAd = null;
+  adLoaded = false;
+  adLoading = false;
 };
 
 export const __resetInterstitialServiceForTests = (): void => {

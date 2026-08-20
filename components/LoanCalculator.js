@@ -3,7 +3,6 @@ import {
   Alert,
   AppState,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -16,6 +15,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import { LOAN_TYPES } from '../utils/constants';
 import LoanResult from './LoanResult';
@@ -56,7 +56,6 @@ import {
 const today = startOfLocalDay(new Date());
 const ACTION_BUTTON_HEIGHT = 54;
 const ACTION_BAR_VERTICAL_PADDING = spacing.lg;
-const ABOUT_WEBSITE_URL = 'https://burak-altintas.com';
 const PLAN_TYPE_LABELS = {
   standard: 'Standart Sabit Taksitli',
   prepaidInterest: 'Peşin Faiz Ödemeli',
@@ -78,6 +77,7 @@ const createCustomPaymentRow = () => ({
 
 const LoanCalculator = () => {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const appStateRef = useRef(AppState.currentState);
   const scrollViewRef = useRef(null);
   const resultRef = useRef(null);
@@ -119,7 +119,6 @@ const LoanCalculator = () => {
   const [foregroundPaintTick, setForegroundPaintTick] = useState(0);
   const [recentCalculations, setRecentCalculations] = useState([]);
   const [isRecentCalculationsOpen, setIsRecentCalculationsOpen] = useState(false);
-  const [isAboutModalVisible, setIsAboutModalVisible] = useState(false);
   const [hasLoadedStoredState, setHasLoadedStoredState] = useState(false);
   const {
     isInterstitialActionRunning,
@@ -202,14 +201,6 @@ const LoanCalculator = () => {
         animated: true,
       });
     }, 120);
-  };
-
-  const handleOpenAboutWebsite = async () => {
-    try {
-      await Linking.openURL(ABOUT_WEBSITE_URL);
-    } catch {
-      Alert.alert('Bağlantı açılamadı', 'burak-altintas.com adresi açılamadı.');
-    }
   };
 
   const buildFormSnapshot = () => ({
@@ -832,7 +823,7 @@ const LoanCalculator = () => {
               paddingTop:
                 spacing.lg + (Platform.OS === 'android' ? insets.top : 0),
               paddingBottom:
-                ACTION_BUTTON_HEIGHT + ACTION_BAR_VERTICAL_PADDING * 3 + insets.bottom,
+                ACTION_BUTTON_HEIGHT + ACTION_BAR_VERTICAL_PADDING * 3 + tabBarHeight,
             },
           ]}
           automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
@@ -846,14 +837,6 @@ const LoanCalculator = () => {
               <Text style={styles.eyebrow}>Bankacı</Text>
               <Text style={styles.title}>Kredi Hesaplama</Text>
             </View>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Bankacı: Kredi Hesaplama hakkında"
-              style={styles.infoButton}
-              onPress={() => setIsAboutModalVisible(true)}
-            >
-              <Feather name="info" size={20} color={colors.primary} />
-            </TouchableOpacity>
           </View>
 
           <View style={styles.card}>
@@ -1246,70 +1229,6 @@ const LoanCalculator = () => {
             </Modal>
           ) : null}
 
-          <Modal
-            transparent
-            animationType="fade"
-            visible={isAboutModalVisible}
-            onRequestClose={() => setIsAboutModalVisible(false)}
-          >
-            <TouchableOpacity
-              activeOpacity={1}
-              style={styles.aboutOverlay}
-              onPress={() => setIsAboutModalVisible(false)}
-            >
-              <TouchableOpacity
-                activeOpacity={1}
-                style={styles.aboutSheet}
-                onPress={() => undefined}
-              >
-                <Text style={styles.aboutTitle}>
-                  Bankacı: Kredi Hesaplama hakkında
-                </Text>
-                <ScrollView
-                  style={styles.aboutContent}
-                  contentContainerStyle={styles.aboutContentInner}
-                  showsVerticalScrollIndicator
-                >
-                  <Text style={styles.aboutText}>
-                    Bu uygulama, kredi hesaplamalarını sahada ve müşteri
-                    görüşmelerinde daha hızlı, pratik ve anlaşılır şekilde
-                    yapabilmek için geliştirildi.
-                  </Text>
-                  <Text style={styles.aboutText}>
-                    Standart taksitli kredi hesaplamasının yanında; peşin faiz
-                    ödemeli, eşit anapara, özel/balon ödeme, anapara ödemesiz
-                    dönem ve artan taksitli ödeme planları gibi gelişmiş
-                    senaryoları da destekler.
-                  </Text>
-                  <Text style={styles.aboutText}>
-                    Uygulamanın gelişmiş ödeme planı özelliklerinin
-                    şekillenmesinde, aktif bankacılık tecrübesiyle değerli geri
-                    bildirimler sağlayan{' '}
-                    <Text style={styles.aboutStrong}>Yasin Aslantürk</Text>’e
-                    teşekkür ederim.
-                  </Text>
-                  <Text style={styles.aboutText}>
-                    Geri bildirim ve iletişim için:
-                  </Text>
-                  <TouchableOpacity
-                    accessibilityRole="link"
-                    style={styles.aboutLinkButton}
-                    onPress={handleOpenAboutWebsite}
-                  >
-                    <Text style={styles.aboutLink}>burak-altintas.com</Text>
-                    <Feather name="external-link" size={17} color={colors.primary} />
-                  </TouchableOpacity>
-                </ScrollView>
-                <TouchableOpacity
-                  style={styles.aboutCloseButton}
-                  onPress={() => setIsAboutModalVisible(false)}
-                >
-                  <Text style={styles.aboutCloseText}>Kapat</Text>
-                </TouchableOpacity>
-              </TouchableOpacity>
-            </TouchableOpacity>
-          </Modal>
-
           <View style={styles.card}>
             <TouchableOpacity
               style={styles.contactToggle}
@@ -1491,7 +1410,7 @@ const LoanCalculator = () => {
         <View
           style={[
             styles.buttonContainer,
-            { paddingBottom: ACTION_BAR_VERTICAL_PADDING + insets.bottom },
+            { paddingBottom: ACTION_BAR_VERTICAL_PADDING + tabBarHeight },
           ]}
         >
           <TouchableOpacity style={styles.button} onPress={handleCalculate}>
@@ -1542,17 +1461,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.title,
     fontWeight: '800',
-  },
-  infoButton: {
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    height: 36,
-    justifyContent: 'center',
-    width: 36,
-    ...shadows.card,
   },
   card: {
     backgroundColor: colors.surface,
@@ -1735,80 +1643,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   datePickerDoneText: {
-    color: colors.surface,
-    fontSize: typography.body,
-    fontWeight: '900',
-  },
-  aboutOverlay: {
-    backgroundColor: 'rgba(15, 23, 42, 0.42)',
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  aboutSheet: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    gap: spacing.md,
-    maxHeight: '82%',
-    padding: spacing.lg,
-    width: '100%',
-    ...shadows.card,
-  },
-  aboutContent: {
-    flexGrow: 0,
-    width: '100%',
-  },
-  aboutContentInner: {
-    gap: spacing.md,
-    paddingRight: spacing.xs,
-  },
-  aboutTitle: {
-    color: colors.text,
-    fontSize: typography.sectionTitle,
-    fontWeight: '900',
-    lineHeight: 26,
-    width: '100%',
-  },
-  aboutText: {
-    color: colors.text,
-    flexShrink: 1,
-    fontSize: typography.body,
-    fontWeight: '600',
-    lineHeight: 23,
-    width: '100%',
-  },
-  aboutStrong: {
-    fontWeight: '900',
-  },
-  aboutLinkButton: {
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: colors.surfaceMuted,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    maxWidth: '100%',
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  aboutLink: {
-    color: colors.primary,
-    flexShrink: 1,
-    fontSize: typography.body,
-    fontWeight: '900',
-  },
-  aboutCloseButton: {
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-    minHeight: 48,
-    justifyContent: 'center',
-    marginTop: spacing.xs,
-  },
-  aboutCloseText: {
     color: colors.surface,
     fontSize: typography.body,
     fontWeight: '900',

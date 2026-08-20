@@ -1,4 +1,5 @@
 import { Platform, type PlatformOSType } from 'react-native';
+import { getHasResolvedPremium, getIsPremium } from '../subscription/premiumStore';
 
 export type InterstitialActionName = 'share' | 'pdf' | 'recommendations';
 
@@ -70,6 +71,24 @@ export const getBannerAdUnitId = (): string => {
     : ADMOB_BANNER_IDS[Platform.OS];
 
   return isUsableAdUnitId(adUnitId) ? adUnitId : '';
+};
+
+/**
+ * Single gate every ad surface must pass through. Ads are off when the global
+ * kill switch is off, when the user holds the premium entitlement, and while
+ * entitlement state is still unknown — a subscriber must never see even one
+ * impression, so an unresolved state is treated as premium.
+ */
+export const areAdsEnabled = (): boolean => {
+  if (!ADS_ENABLED) {
+    return false;
+  }
+
+  if (!getHasResolvedPremium()) {
+    return false;
+  }
+
+  return !getIsPremium();
 };
 
 export const shouldRequestNonPersonalizedAds = (): boolean => false;

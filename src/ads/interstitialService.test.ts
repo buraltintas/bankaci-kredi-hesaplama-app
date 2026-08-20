@@ -80,6 +80,9 @@ const loadService = (adsEnabled = true) => {
   jest.doMock('./adConfig', () => ({
     ...jest.requireActual('./adConfig'),
     ADS_ENABLED: adsEnabled,
+    // The service now asks areAdsEnabled(), which also folds in the premium
+    // entitlement. These tests cover the ad path only, so it tracks the flag.
+    areAdsEnabled: () => adsEnabled,
   }));
   jest.isolateModules(() => undefined);
   // eslint-disable-next-line @typescript-eslint/no-require-imports
