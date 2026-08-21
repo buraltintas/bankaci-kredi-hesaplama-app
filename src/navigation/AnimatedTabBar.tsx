@@ -141,7 +141,7 @@ const AnimatedTabBar = ({
 
   return (
     <View
-      style={[styles.bar, { paddingBottom: insets.bottom }]}
+      style={styles.bar}
       onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
     >
       {tabWidth > 0 ? (
@@ -153,7 +153,7 @@ const AnimatedTabBar = ({
           ]}
         />
       ) : null}
-      <View style={styles.row}>
+      <View style={[styles.row, { paddingBottom: insets.bottom }]}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    height: BAR_CONTENT_HEIGHT,
+    minHeight: BAR_CONTENT_HEIGHT,
     paddingTop: spacing.xs,
   },
   tab: {
