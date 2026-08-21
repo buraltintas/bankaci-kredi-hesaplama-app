@@ -16,6 +16,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect, useScrollToTop } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { LOAN_TYPES } from '../utils/constants';
 import LoanResult from './LoanResult';
@@ -125,6 +126,17 @@ const LoanCalculator = () => {
     isInterstitialActionRunning,
     runActionWithOptionalInterstitial,
   } = useInterstitialAction();
+
+  useScrollToTop(scrollViewRef);
+  useFocusEffect(
+    React.useCallback(() => {
+      const frame = requestAnimationFrame(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      });
+
+      return () => cancelAnimationFrame(frame);
+    }, [])
+  );
 
 
   useEffect(() => {

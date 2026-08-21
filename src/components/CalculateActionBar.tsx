@@ -16,18 +16,8 @@ const BUTTON_HEIGHT = 54;
 const BAR_VERTICAL_PADDING = spacing.lg;
 const SWEEP_DURATION_MS = 2400;
 const FADE_DURATION_MS = 520;
-/** Drawn at twice the bar width so a full slide never exposes an edge. */
 const SWEEP_WIDTH_MULTIPLIER = 2;
 
-/**
- * Soft tints rather than full-strength brand colours: this sits behind a
- * primary button on a light bar, and anything stronger reads as an alert.
- *
- * Five evenly spaced stops make the gradient repeat every half of the layer.
- * Since the layer is twice the bar wide and slides exactly one bar width per
- * cycle, the end frame is identical to the start — no seam when the loop
- * restarts.
- */
 const SWEEP_COLORS = [
   'rgba(8, 119, 232, 0.05)',
   'rgba(11, 163, 107, 0.30)',
@@ -81,14 +71,8 @@ const CalculateActionBar = ({
     };
   }, []);
 
-  const canAnimate = !prefersReducedMotion && barWidth > 0;
-
-  // The sweep runs continuously while the bar can animate, and only its
-  // opacity follows readiness. Starting the loop on the readiness edge made
-  // the gradient snap into view mid-stride; fading an already-moving layer
-  // reads as it easing in.
   useEffect(() => {
-    if (!canAnimate) {
+    if (prefersReducedMotion || barWidth === 0) {
       sweep.stopAnimation();
       sweep.setValue(0);
       return;
@@ -106,20 +90,19 @@ const CalculateActionBar = ({
     loop.start();
 
     return () => loop.stop();
-  }, [canAnimate, sweep]);
+  }, [barWidth, prefersReducedMotion, sweep]);
 
   useEffect(() => {
     const animation = Animated.timing(fade, {
-      toValue: canAnimate && isReady ? 1 : 0,
+      toValue: !prefersReducedMotion && barWidth > 0 && isReady ? 1 : 0,
       duration: FADE_DURATION_MS,
       easing: Easing.inOut(Easing.ease),
       useNativeDriver: true,
     });
 
     animation.start();
-
     return () => animation.stop();
-  }, [canAnimate, fade, isReady]);
+  }, [barWidth, fade, isReady, prefersReducedMotion]);
 
   const translateX = sweep.interpolate({
     inputRange: [0, 1],
@@ -131,7 +114,7 @@ const CalculateActionBar = ({
       style={[styles.bar, { paddingBottom }]}
       onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
     >
-      {canAnimate ? (
+      {!prefersReducedMotion && barWidth > 0 ? (
         <Animated.View
           pointerEvents="none"
           style={[

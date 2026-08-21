@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -93,6 +94,10 @@ const AnimatedTabBar = ({
   const indicatorX = useRef(new Animated.Value(0)).current;
 
   const tabWidth = state.routes.length > 0 ? barWidth / state.routes.length : 0;
+  const bottomPadding =
+    Platform.OS === 'android'
+      ? Math.max(insets.bottom, spacing.lg)
+      : insets.bottom;
 
   useEffect(() => {
     let isActive = true;
@@ -153,7 +158,15 @@ const AnimatedTabBar = ({
           ]}
         />
       ) : null}
-      <View style={[styles.row, { paddingBottom: insets.bottom }]}>
+      <View
+        style={[
+          styles.row,
+          {
+            minHeight: BAR_CONTENT_HEIGHT + bottomPadding,
+            paddingBottom: bottomPadding,
+          },
+        ]}
+      >
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;

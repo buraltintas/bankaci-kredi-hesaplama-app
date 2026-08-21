@@ -21,8 +21,9 @@ const RootNavigator = () => {
       tabBar={(props) => <AnimatedTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        // Cross-fades the screens instead of cutting between them.
-        animation: 'fade',
+        // Keep tab changes directional and avoid Android fade compositing
+        // artifacts around fixed action surfaces.
+        animation: 'shift',
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
       }}

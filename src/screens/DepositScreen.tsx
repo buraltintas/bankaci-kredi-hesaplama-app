@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,6 +14,7 @@ import {
 import ViewShot from 'react-native-view-shot';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect, useScrollToTop } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import CalculateActionBar from '../components/CalculateActionBar';
 import NumericInput from '../components/NumericInput';
@@ -61,6 +63,19 @@ const DepositScreen = () => {
   const [formError, setFormError] = useState('');
   const [result, setResult] = useState<DepositCalculationResult | null>(null);
 
+  useScrollToTop(scrollViewRef);
+  useFocusEffect(
+    useCallback(() => {
+      setFormError('');
+
+      const frame = requestAnimationFrame(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      });
+
+      return () => cancelAnimationFrame(frame);
+    }, [])
+  );
+
   const parsedTermDays = parseNumericInput(termDays, 'integer').value ?? 0;
   const bracketLabel = useMemo(
     () => describeWithholdingTaxBracket(parsedTermDays),
@@ -78,6 +93,7 @@ const DepositScreen = () => {
 
   const applyTermDays = useCallback(
     (nextTermDays: string) => {
+      setFormError('');
       setTermDays(nextTermDays);
 
       if (hasEditedWithholdingRate) {
@@ -96,8 +112,19 @@ const DepositScreen = () => {
   );
 
   const handleChangeWithholdingRate = useCallback((nextValue: string) => {
+    setFormError('');
     setHasEditedWithholdingRate(true);
     setWithholdingRate(nextValue);
+  }, []);
+
+  const handleChangePrincipal = useCallback((nextValue: string) => {
+    setFormError('');
+    setPrincipal(nextValue);
+  }, []);
+
+  const handleChangeAnnualRate = useCallback((nextValue: string) => {
+    setFormError('');
+    setAnnualRate(nextValue);
   }, []);
 
   const scrollToResultSoon = useCallback(() => {
@@ -140,6 +167,7 @@ const DepositScreen = () => {
     }
 
     try {
+      Keyboard.dismiss();
       setResult(
         calculateDeposit({
           principal: parsedPrincipal.value,
@@ -188,6 +216,7 @@ const DepositScreen = () => {
         style={styles.mainContainer}
       >
         <ScrollView
+          ref={scrollViewRef}
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
@@ -220,7 +249,7 @@ const DepositScreen = () => {
               label="Anapara (TL)"
               mode="money"
               value={principal}
-              onChangeText={setPrincipal}
+              onChangeText={handleChangePrincipal}
               placeholder="Örn. 250.000"
             />
 
@@ -229,7 +258,7 @@ const DepositScreen = () => {
             <NumericInput
               label="Yıllık Brüt Faiz Oranı (%)"
               value={annualRate}
-              onChangeText={setAnnualRate}
+              onChangeText={handleChangeAnnualRate}
               placeholder="Örn. 42,50"
             />
 
@@ -321,9 +350,11 @@ const DepositScreen = () => {
                   <Text style={styles.summaryValue}>{result.termDays} gün</Text>
                 </View>
                 <View style={styles.summaryCell}>
-                  <Text style={styles.summaryLabel}>Brüt Faiz</Text>
+                  <Text style={styles.summaryLabel}>
+                    Yıllık Brüt Faiz Oranı
+                  </Text>
                   <Text style={styles.summaryValue}>
-                    {formatCurrency(result.grossInterest)}
+                    {formatRate(result.annualInterestRatePercent)}
                   </Text>
                 </View>
                 <View style={styles.summaryCell}>
@@ -335,17 +366,15 @@ const DepositScreen = () => {
                   </Text>
                 </View>
                 <View style={styles.summaryCell}>
-                  <Text style={styles.summaryLabel}>Net Faiz</Text>
-                  <Text style={[styles.summaryValue, styles.summaryPositive]}>
-                    {formatCurrency(result.netInterest)}
+                  <Text style={styles.summaryLabel}>Brüt Faiz</Text>
+                  <Text style={styles.summaryValue}>
+                    {formatCurrency(result.grossInterest)}
                   </Text>
                 </View>
                 <View style={styles.summaryCell}>
-                  <Text style={styles.summaryLabel}>Net Yıllık Getiri</Text>
-                  <Text style={styles.summaryValue}>
-                    {`%${result.effectiveAnnualNetRatePercent
-                      .toFixed(2)
-                      .replace('.', ',')}`}
+                  <Text style={styles.summaryLabel}>Net Faiz</Text>
+                  <Text style={[styles.summaryValue, styles.summaryPositive]}>
+                    {formatCurrency(result.netInterest)}
                   </Text>
                 </View>
               </View>
