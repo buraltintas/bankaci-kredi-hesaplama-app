@@ -17,12 +17,13 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect, useScrollToTop } from '@react-navigation/native';
-import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LOAN_TYPES } from '../utils/constants';
 import LoanResult from './LoanResult';
 import NumericInput from '../src/components/NumericInput';
 import CalculateActionBar from '../src/components/CalculateActionBar';
-import { colors, radius, shadows, spacing, typography } from '../src/design/tokens';
+import { colors, premium, radius, shadows, spacing, typography } from '../src/design/tokens';
 import { calculateLoan } from '../src/domain/loan/calculateLoan';
 import {
   buildCustomPaymentsFromRows,
@@ -41,6 +42,12 @@ import { INTEREST_ONLY_PLAN_LABEL } from '../src/domain/loan/interestOnlySummary
 import { buildLoanShareMessage } from '../src/domain/loan/shareSummary';
 import { exportLoanPdf } from '../src/pdf/exportLoanPdf';
 import { useInterstitialAction } from '../src/ads/useInterstitialAction';
+import { usePremium } from '../src/subscription/PremiumProvider';
+import { usePaywall } from '../src/subscription/PaywallProvider';
+import {
+  canExportPdf,
+  canUsePlanType,
+} from '../src/subscription/premiumFeatures';
 import {
   addRecentCalculation,
   loadPdfContactPreferences,
@@ -126,6 +133,8 @@ const LoanCalculator = () => {
     isInterstitialActionRunning,
     runActionWithOptionalInterstitial,
   } = useInterstitialAction();
+  const { isPremium } = usePremium();
+  const { openPaywall } = usePaywall();
 
   useScrollToTop(scrollViewRef);
   useFocusEffect(
@@ -611,6 +620,14 @@ const LoanCalculator = () => {
   };
 
   const handleCalculate = async () => {
+    // Backstop: whatever route left a premium plan selected, a non-subscriber
+    // cannot compute it. The plan picker already blocks selection, but a
+    // restored session could land here with a premium plan chosen.
+    if (!canUsePlanType(planType, isPremium)) {
+      openPaywall();
+      return;
+    }
+
     try {
       const formSnapshot = buildFormSnapshot();
       const loanInput = buildLoanInput();
@@ -661,6 +678,11 @@ const LoanCalculator = () => {
   };
 
   const handleOpenRecentCalculation = (recentCalculation) => {
+    if (!canUsePlanType(recentCalculation.form.planType, isPremium)) {
+      openPaywall();
+      return;
+    }
+
     try {
       applyFormSnapshot(recentCalculation.form);
       const nextResult = calculateLoan(
@@ -678,6 +700,11 @@ const LoanCalculator = () => {
   };
 
   const handleShareRecentCalculationPdf = async (recentCalculation) => {
+    if (!canExportPdf(isPremium)) {
+      openPaywall();
+      return;
+    }
+
     await runActionWithOptionalInterstitial('pdf', async () => {
       try {
         await shareResultPdf(
@@ -714,6 +741,11 @@ const LoanCalculator = () => {
 
   const handleSharePdf = async () => {
     if (!result) {
+      return;
+    }
+
+    if (!canExportPdf(isPremium)) {
+      openPaywall();
       return;
     }
 
@@ -948,30 +980,60 @@ const LoanCalculator = () => {
             <View style={styles.planTypeGroup}>
               {Object.entries(PLAN_TYPE_LABELS).map(([type, label]) => {
                 const isSelected = planType === type;
+                const isLocked = !canUsePlanType(type, isPremium);
 
                 return (
                   <TouchableOpacity
                     key={type}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={
+                      isLocked ? `${label} (premium)` : label
+                    }
                     style={[
                       styles.planTypeOption,
                       isSelected && styles.planTypeOptionSelected,
                     ]}
-	                    onPress={() => {
-	                      setPlanType(type);
-	                      if (type === 'customPayment' && customPaymentRows.length === 0) {
-	                        setCustomPaymentRows([createCustomPaymentRow()]);
-	                      }
+                    onPress={() => {
+                      // Locked plans open the paywall instead of selecting, so
+                      // the choice stays visible and the person sees what it
+                      // unlocks rather than a dead control.
+                      if (isLocked) {
+                        openPaywall();
+                        return;
+                      }
+                      setPlanType(type);
+                      if (type === 'customPayment' && customPaymentRows.length === 0) {
+                        setCustomPaymentRows([createCustomPaymentRow()]);
+                      }
                       if (isProgressiveInstallmentPlanType(type)) {
                         setInstallmentIncreaseStartNo((currentValue) => currentValue || '1');
                         setInstallmentIncreaseEndNo((currentValue) => currentValue || term);
                       }
-	                      clearResult();
-	                    }}
+                      clearResult();
+                    }}
                   >
+                    {isLocked ? (
+                      <LinearGradient
+                        colors={premium.gradient}
+                        start={premium.gradientStart}
+                        end={premium.gradientEnd}
+                        style={styles.planTypeGradient}
+                      />
+                    ) : null}
+                    {isLocked ? (
+                      <MaterialCommunityIcons
+                        name="crown"
+                        size={15}
+                        color={premium.onGradient}
+                        style={styles.planTypeCrown}
+                      />
+                    ) : null}
                     <Text
                       style={[
                         styles.planTypeText,
                         isSelected && styles.planTypeTextSelected,
+                        isLocked && styles.planTypeTextPremium,
                       ]}
                     >
                       {label}
@@ -1380,7 +1442,39 @@ const LoanCalculator = () => {
                             handleOpenRecentCalculation(recentCalculation)
                           }
                         >
-                          <Text style={styles.recentActionText}>Görüntüle</Text>
+                          {!canUsePlanType(
+                            recentCalculation.form.planType,
+                            isPremium
+                          ) ? (
+                            <LinearGradient
+                              colors={premium.gradient}
+                              start={premium.gradientStart}
+                              end={premium.gradientEnd}
+                              style={styles.recentGradient}
+                            />
+                          ) : null}
+                          {!canUsePlanType(
+                            recentCalculation.form.planType,
+                            isPremium
+                          ) ? (
+                            <MaterialCommunityIcons
+                              name="crown"
+                              size={14}
+                              color={premium.onGradient}
+                              style={styles.recentCrown}
+                            />
+                          ) : null}
+                          <Text
+                            style={[
+                              styles.recentActionText,
+                              !canUsePlanType(
+                                recentCalculation.form.planType,
+                                isPremium
+                              ) && styles.recentActionTextPremium,
+                            ]}
+                          >
+                            Görüntüle
+                          </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[
@@ -1393,6 +1487,22 @@ const LoanCalculator = () => {
                           }
                           disabled={isInterstitialActionRunning}
                         >
+                          {!canExportPdf(isPremium) ? (
+                            <LinearGradient
+                              colors={premium.gradient}
+                              start={premium.gradientStart}
+                              end={premium.gradientEnd}
+                              style={styles.recentGradient}
+                            />
+                          ) : null}
+                          {!canExportPdf(isPremium) ? (
+                            <MaterialCommunityIcons
+                              name="crown"
+                              size={14}
+                              color={premium.onGradient}
+                              style={styles.recentCrown}
+                            />
+                          ) : null}
                           <Text style={styles.recentPdfText}>PDF</Text>
                         </TouchableOpacity>
                       </View>
@@ -1422,6 +1532,7 @@ const LoanCalculator = () => {
                 onSharePdf={handleSharePdf}
                 onOpenRecommendations={handleOpenRecommendations}
                 isActionDisabled={isInterstitialActionRunning}
+                isPdfLocked={!canExportPdf(isPremium)}
               />
             </View>
           ) : null}
@@ -1526,13 +1637,15 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   planTypeOption: {
+    alignItems: 'center',
     backgroundColor: colors.surfaceMuted,
     borderColor: colors.border,
     borderRadius: radius.md,
     borderWidth: 1,
-    minHeight: 46,
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
+    minHeight: 46,
+    overflow: 'hidden',
+    paddingHorizontal: spacing.xxl,
     paddingVertical: spacing.sm,
   },
   planTypeOptionSelected: {
@@ -1546,6 +1659,21 @@ const styles = StyleSheet.create({
   },
   planTypeTextSelected: {
     color: colors.primaryDark,
+  },
+  planTypeTextPremium: {
+    color: premium.onGradient,
+  },
+  planTypeCrown: {
+    left: spacing.md,
+    position: 'absolute',
+  },
+  planTypeGradient: {
+    borderRadius: radius.md,
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
   customPaymentGroup: {
     gap: spacing.sm,
@@ -1748,6 +1876,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
+  recentGradient: {
+    borderRadius: radius.md,
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  recentCrown: {
+    left: spacing.md,
+    position: 'absolute',
+  },
+  recentActionTextPremium: {
+    color: premium.onGradient,
+  },
   recentActionButton: {
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -1757,6 +1900,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 40,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   recentPdfButton: {
     backgroundColor: colors.primary,

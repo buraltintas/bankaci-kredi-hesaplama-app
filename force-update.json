@@ -1,0 +1,9 @@
+{
+  "android": {
+    "enabled": true,
+    "minimumVersionCode": 18,
+    "latestVersionCode": 18,
+    "storeUrl": "https://play.google.com/store/apps/details?id=com.xewor.bankacikredihesaplama",
+    "message": "Bankacı'yı kullanmaya devam etmek için uygulamanızı güncelleyin."
+  }
+}

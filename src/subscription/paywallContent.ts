@@ -4,12 +4,13 @@ export const TERMS_URL =
 
 export const PRIVACY_URL = 'https://bankaci.burak-altintas.com/privacy/';
 
-export const PAYWALL_TITLE = 'Reklamsız Bankacı';
+export const PAYWALL_TITLE = 'Premium Bankacı';
 export const PAYWALL_SUBTITLE =
-  'Banner ve geçiş reklamları tamamen kapanır. Hesaplama, ödeme planı ve PDF paylaşımı kesintisiz devam eder.';
+  'Gelişmiş hesaplama araçlarının kilidini açın; banner ve geçiş reklamları olmadan kesintisiz çalışın.';
 
 export const PAYWALL_BENEFITS = [
   'Hiçbir reklam gösterilmez',
+  'Konut kredisi devir hesaplama',
   'PDF ve paylaşım akışları beklemeden açılır',
   'Tüm hesaplama özellikleri dahil',
 ] as const;

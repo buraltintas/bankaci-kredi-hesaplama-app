@@ -44,3 +44,15 @@ export const shadows = {
     elevation: 3,
   },
 };
+
+/**
+ * Premium accent — a blue-to-violet gradient and its icon, shared by every
+ * surface that gates a feature so they read as one thing.
+ */
+export const premium = {
+  gradient: ['#2F6BFF', '#8B5CF6'] as const,
+  gradientStart: { x: 0, y: 0 },
+  gradientEnd: { x: 1, y: 1 },
+  accent: '#7C4DFF',
+  onGradient: '#FFFFFF',
+};

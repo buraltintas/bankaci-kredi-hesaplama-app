@@ -48,9 +48,16 @@ const ResultBannerAd = () => {
 
   return (
     <View style={styles.wrapper}>
-      {/* Placed above the ad with a deliberate gap: a tappable element flush
-          against a banner invites accidental clicks, which AdMob counts as
-          invalid traffic. */}
+      <View style={styles.container}>
+        <BannerAd
+          unitId={adUnitId}
+          size={bannerSize}
+          requestOptions={{ requestNonPersonalizedAdsOnly: false }}
+        />
+      </View>
+      {/* Below the ad with a deliberate gap: a tappable element flush against
+          a banner invites accidental clicks, which AdMob counts as invalid
+          traffic. */}
       <TouchableOpacity
         accessibilityRole="button"
         accessibilityLabel="Reklamları kaldır"
@@ -59,13 +66,6 @@ const ResultBannerAd = () => {
       >
         <Text style={styles.removeAdsText}>Reklamları kaldır</Text>
       </TouchableOpacity>
-      <View style={styles.container}>
-        <BannerAd
-          unitId={adUnitId}
-          size={bannerSize}
-          requestOptions={{ requestNonPersonalizedAdsOnly: false }}
-        />
-      </View>
     </View>
   );
 };
@@ -75,11 +75,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   removeAdsButton: {
-    alignSelf: 'flex-end',
+    alignSelf: 'center',
     justifyContent: 'center',
     // Wide gap on purpose: tested on device, a thumb aiming here was landing
     // on the banner instead. Accidental ad clicks count as invalid traffic.
-    marginBottom: spacing.xl,
+    marginTop: spacing.xl,
     minHeight: 44,
     paddingHorizontal: spacing.sm,
   },

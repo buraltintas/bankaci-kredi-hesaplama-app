@@ -25,19 +25,12 @@ export const getIsPremium = (): boolean => isPremium;
  */
 export const getHasResolvedPremium = (): boolean => hasResolvedOnce;
 
-export const markPremiumResolved = (): void => {
-  if (hasResolvedOnce) {
-    return;
-  }
-
-  hasResolvedOnce = true;
-  notify();
-};
-
 export const setIsPremium = (nextValue: boolean): void => {
+  const didResolve = !hasResolvedOnce;
+  const didChange = isPremium !== nextValue;
   hasResolvedOnce = true;
 
-  if (isPremium === nextValue) {
+  if (!didResolve && !didChange) {
     return;
   }
 

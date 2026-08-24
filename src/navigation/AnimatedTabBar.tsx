@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { colors, spacing, typography } from '../design/tokens';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { colors, premium, spacing, typography } from '../design/tokens';
 
 const BAR_CONTENT_HEIGHT = 56;
 const INDICATOR_WIDTH = 28;
@@ -21,6 +22,15 @@ type TabItemProps = {
   animatesFocus: boolean;
   children: React.ReactNode;
 };
+
+const PremiumCrown = () => (
+  <MaterialCommunityIcons
+    name="crown"
+    size={14}
+    color={premium.accent}
+    style={styles.premiumBadge}
+  />
+);
 
 /**
  * Keeps the plain bar the app already had and only softens the moment of
@@ -87,7 +97,12 @@ const AnimatedTabBar = ({
   state,
   descriptors,
   navigation,
-}: BottomTabBarProps) => {
+  premiumRouteNames = [],
+  showPremiumBadges = true,
+}: BottomTabBarProps & {
+  premiumRouteNames?: readonly string[];
+  showPremiumBadges?: boolean;
+}) => {
   const insets = useSafeAreaInsets();
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [barWidth, setBarWidth] = useState(0);
@@ -98,6 +113,9 @@ const AnimatedTabBar = ({
     Platform.OS === 'android'
       ? Math.max(insets.bottom, spacing.lg)
       : insets.bottom;
+  const selectedRouteIsPremium = premiumRouteNames.includes(
+    state.routes[state.index]?.name
+  );
 
   useEffect(() => {
     let isActive = true;
@@ -154,6 +172,11 @@ const AnimatedTabBar = ({
           pointerEvents="none"
           style={[
             styles.indicator,
+            {
+              backgroundColor: selectedRouteIsPremium
+                ? premium.accent
+                : colors.primary,
+            },
             { transform: [{ translateX: indicatorX }] },
           ]}
         />
@@ -170,8 +193,10 @@ const AnimatedTabBar = ({
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;
+          const isPremiumRoute = premiumRouteNames.includes(route.name);
           const label = options.title ?? route.name;
-          const color = isFocused ? colors.primary : colors.textMuted;
+          const defaultColor = isFocused ? colors.primary : colors.textMuted;
+          const itemColor = isPremiumRoute ? premium.accent : defaultColor;
 
           const handlePress = () => {
             const event = navigation.emit({
@@ -201,12 +226,18 @@ const AnimatedTabBar = ({
                 isFocused={isFocused}
                 animatesFocus={!prefersReducedMotion}
               >
+                {isPremiumRoute && showPremiumBadges ? (
+                  <PremiumCrown />
+                ) : null}
                 {options.tabBarIcon?.({
                   focused: isFocused,
-                  color,
+                  color: itemColor,
                   size: 22,
                 })}
-                <Text style={[styles.label, { color }]} numberOfLines={1}>
+                <Text
+                  style={[styles.label, { color: itemColor }]}
+                  numberOfLines={1}
+                >
                   {label}
                 </Text>
               </TabItemContent>
@@ -236,7 +267,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   indicator: {
-    backgroundColor: colors.primary,
     borderRadius: INDICATOR_HEIGHT,
     height: INDICATOR_HEIGHT,
     left: 0,
@@ -248,6 +278,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     justifyContent: 'center',
+  },
+  premiumBadge: {
+    left: 0,
+    position: 'absolute',
+    top: -2,
+    zIndex: 1,
   },
   label: {
     fontSize: typography.small,

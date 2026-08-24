@@ -2,7 +2,7 @@
   "name": "bankaci-kredi-hesaplama",
   "license": "0BSD",
   "main": "index.js",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "scripts": {
     "start": "expo start --lan --clear --port 8081",
     "start:device": "expo start --lan --clear --port 8081",

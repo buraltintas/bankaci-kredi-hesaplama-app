@@ -25,6 +25,7 @@ import { colors, radius, spacing, typography } from '../design/tokens';
 import { usePremium } from './PremiumProvider';
 import {
   getPremiumOffering,
+  getRevenueCatAppUserId,
   purchasePremiumPackage,
   restorePremiumPurchases,
 } from './purchases';
@@ -83,7 +84,7 @@ const describePackage = (
   }
 };
 
-const PACKAGE_ORDER = ['ANNUAL', 'LIFETIME', 'MONTHLY'];
+const PACKAGE_ORDER = ['MONTHLY', 'ANNUAL', 'LIFETIME'];
 
 const sortPackages = (packages: PurchasesPackage[]): PurchasesPackage[] => {
   return [...packages].sort((first, second) => {
@@ -112,6 +113,9 @@ export const PaywallProvider = ({ children }: PropsWithChildren) => {
   const [isLoadingOffering, setIsLoadingOffering] = useState(false);
   const [pendingPackageId, setPendingPackageId] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [revenueCatAppUserId, setRevenueCatAppUserId] = useState<string | null>(
+    null
+  );
 
   const openPaywall = useCallback(() => setIsVisible(true), []);
   const closePaywall = useCallback(() => setIsVisible(false), []);
@@ -123,6 +127,7 @@ export const PaywallProvider = ({ children }: PropsWithChildren) => {
 
     let isActive = true;
     setIsLoadingOffering(true);
+    setRevenueCatAppUserId(null);
 
     void getPremiumOffering()
       .then((offering) => {
@@ -133,6 +138,11 @@ export const PaywallProvider = ({ children }: PropsWithChildren) => {
         if (!isActive) return;
         setIsLoadingOffering(false);
       });
+
+    void getRevenueCatAppUserId().then((appUserId) => {
+      if (!isActive) return;
+      setRevenueCatAppUserId(appUserId);
+    });
 
     return () => {
       isActive = false;
@@ -167,7 +177,7 @@ export const PaywallProvider = ({ children }: PropsWithChildren) => {
     setIsRestoring(false);
 
     if (restored) {
-      Alert.alert('Geri yüklendi', 'Reklamsız kullanım hesabınıza tanımlandı.');
+      Alert.alert('Geri yüklendi', 'Bankacı Premium hesabınıza tanımlandı.');
       return;
     }
 
@@ -301,6 +311,12 @@ export const PaywallProvider = ({ children }: PropsWithChildren) => {
                 <Text style={styles.legalText}>Gizlilik Politikası</Text>
               </TouchableOpacity>
             </View>
+
+            {revenueCatAppUserId ? (
+              <Text selectable style={styles.supportId}>
+                Destek Kimliği: {revenueCatAppUserId}
+              </Text>
+            ) : null}
           </ScrollView>
         </View>
       </Modal>
@@ -443,5 +459,12 @@ const styles = StyleSheet.create({
   },
   legalSeparator: {
     color: colors.placeholder,
+  },
+  supportId: {
+    color: colors.placeholder,
+    fontSize: typography.small,
+    lineHeight: 18,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
 });

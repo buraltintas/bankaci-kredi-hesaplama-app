@@ -43,8 +43,15 @@ describe('ad gating by premium entitlement', () => {
 
   it('allows ads once a non-premium state is resolved', async () => {
     await hydratePremiumFromCache();
+    setIsPremium(false);
 
     expect(areAdsEnabled()).toBe(true);
+  });
+
+  it('keeps ads blocked when an empty cache cannot resolve entitlement', async () => {
+    await hydratePremiumFromCache();
+
+    expect(areAdsEnabled()).toBe(false);
   });
 
   it('blocks ads for a premium user', async () => {
@@ -55,7 +62,6 @@ describe('ad gating by premium entitlement', () => {
   });
 
   it('brings ads back when the entitlement lapses', async () => {
-    await hydratePremiumFromCache();
     setIsPremium(true);
     setIsPremium(false);
 
@@ -66,7 +72,7 @@ describe('ad gating by premium entitlement', () => {
     const listener = jest.fn();
     subscribeToPremium(listener);
 
-    await hydratePremiumFromCache();
+    setIsPremium(false);
 
     // Without this notification a banner mounted during the unknown window
     // would stay hidden for the rest of the session — lost ad revenue.
@@ -75,8 +81,8 @@ describe('ad gating by premium entitlement', () => {
   });
 
   it('keeps a returning subscriber ad-free before the network answers', async () => {
-    await hydratePremiumFromCache();
     setIsPremium(true);
+    await Promise.resolve();
 
     __resetPremiumStoreForTests();
     expect(areAdsEnabled()).toBe(false);

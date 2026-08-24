@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ViewShot from 'react-native-view-shot';
-import { Feather } from '@expo/vector-icons';
-import { colors, radius, shadows, spacing, typography } from '../src/design/tokens';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { colors, premium, radius, shadows, spacing, typography } from '../src/design/tokens';
 import ResultBannerAd from './AdBanner';
 import { formatCurrency } from '../src/utils/formatCurrency';
 import { formatDate } from '../src/utils/dateMath';
@@ -97,6 +98,7 @@ const LoanResult = ({
   onSharePdf,
   onOpenRecommendations = (callback) => callback(),
   isActionDisabled = false,
+  isPdfLocked = false,
 }) => {
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [isRecommendationsOpen, setIsRecommendationsOpen] = useState(false);
@@ -426,14 +428,40 @@ const LoanResult = ({
           <Feather name="share-2" size={19} color={colors.primary} />
           <Text style={styles.secondaryButtonText}>Paylaş</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.pdfButton, isActionDisabled && styles.disabledButton]}
-          onPress={onSharePdf}
-          disabled={isActionDisabled}
-        >
-          <Feather name="file-text" size={19} color={colors.surface} />
-          <Text style={styles.pdfButtonText}>PDF</Text>
-        </TouchableOpacity>
+        {isPdfLocked ? (
+          <TouchableOpacity
+            style={[styles.pdfButtonWrapper, isActionDisabled && styles.disabledButton]}
+            onPress={onSharePdf}
+            disabled={isActionDisabled}
+            accessibilityRole="button"
+            accessibilityLabel="PDF (premium)"
+          >
+            <LinearGradient
+              colors={premium.gradient}
+              start={premium.gradientStart}
+              end={premium.gradientEnd}
+              style={styles.pdfButton}
+            >
+              <MaterialCommunityIcons
+                name="crown"
+                size={19}
+                color={premium.onGradient}
+                style={styles.pdfButtonCrown}
+              />
+              <Text style={styles.pdfButtonText}>PDF</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.pdfButton, isActionDisabled && styles.disabledButton]}
+            onPress={onSharePdf}
+            disabled={isActionDisabled}
+            accessibilityLabel="PDF"
+          >
+            <Feather name="file-text" size={19} color={colors.surface} />
+            <Text style={styles.pdfButtonText}>PDF</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ResultBannerAd />
@@ -712,6 +740,11 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: '900',
   },
+  pdfButtonWrapper: {
+    borderRadius: radius.md,
+    flex: 1,
+    overflow: 'hidden',
+  },
   pdfButton: {
     alignItems: 'center',
     backgroundColor: colors.success,
@@ -721,6 +754,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: 'center',
     minHeight: 50,
+  },
+  pdfButtonCrown: {
+    left: spacing.lg,
+    position: 'absolute',
   },
   pdfButtonText: {
     color: colors.surface,

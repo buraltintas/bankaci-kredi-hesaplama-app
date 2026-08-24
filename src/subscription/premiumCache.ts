@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getIsPremium,
-  markPremiumResolved,
   setIsPremium,
   subscribeToPremium,
 } from './premiumStore';
@@ -22,19 +21,16 @@ export const hydratePremiumFromCache = async (): Promise<void> => {
     }
   } catch {
     // Cache unavailable — fall back to the network result.
-  } finally {
-    // The cached answer is enough to decide locally: ads stay blocked for a
-    // known subscriber and are allowed for everyone else without waiting on
-    // the network.
-    markPremiumResolved();
   }
 };
 
 export const startPersistingPremium = (): (() => void) => {
   return subscribeToPremium((isPremium) => {
-    void AsyncStorage.setItem(PREMIUM_CACHE_KEY, isPremium ? '1' : '0').catch(
-      () => undefined
-    );
+    const persistence = isPremium
+      ? AsyncStorage.setItem(PREMIUM_CACHE_KEY, '1')
+      : AsyncStorage.removeItem(PREMIUM_CACHE_KEY);
+
+    void persistence.catch(() => undefined);
   });
 };
 

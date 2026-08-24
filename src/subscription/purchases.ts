@@ -36,6 +36,22 @@ const hasPremiumEntitlement = (customerInfo: CustomerInfo): boolean => {
   return customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined;
 };
 
+/** Refreshes the entitlement after connectivity returns. */
+export const refreshPremiumStatus = async (): Promise<void> => {
+  const Purchases = loadPurchases();
+
+  if (!Purchases) {
+    return;
+  }
+
+  try {
+    const customerInfo = await Purchases.getCustomerInfo();
+    setIsPremium(hasPremiumEntitlement(customerInfo));
+  } catch {
+    // Keep the cached/unknown state. Unknown users remain ad-free.
+  }
+};
+
 /**
  * Configures RevenueCat and starts tracking the premium entitlement.
  * Safe to call more than once; only the first call configures the SDK.
@@ -59,8 +75,7 @@ export const initializePurchases = async (): Promise<void> => {
       setIsPremium(hasPremiumEntitlement(customerInfo));
     });
 
-    const customerInfo = await Purchases.getCustomerInfo();
-    setIsPremium(hasPremiumEntitlement(customerInfo));
+    await refreshPremiumStatus();
   } catch {
     // Offline or misconfigured — the cached entitlement stays in effect.
   }
@@ -76,6 +91,24 @@ export const getPremiumOffering = async (): Promise<PurchasesOffering | null> =>
   try {
     const offerings = await Purchases.getOfferings();
     return offerings.current ?? null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Anonymous RevenueCat identifier used to locate the customer during support.
+ * Null in Expo Go or when the native SDK is unavailable.
+ */
+export const getRevenueCatAppUserId = async (): Promise<string | null> => {
+  const Purchases = loadPurchases();
+
+  if (!Purchases) {
+    return null;
+  }
+
+  try {
+    return await Purchases.getAppUserID();
   } catch {
     return null;
   }

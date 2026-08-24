@@ -6,6 +6,7 @@ import { DefaultTheme, NavigationContainer, type Theme } from '@react-navigation
 import RootNavigator from './src/navigation/RootNavigator';
 import { PremiumProvider } from './src/subscription/PremiumProvider';
 import { PaywallProvider } from './src/subscription/PaywallProvider';
+import ForceUpdateGate from './src/update/ForceUpdateGate';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -89,7 +90,8 @@ export default function RootApp() {
       <PremiumProvider>
         <PaywallProvider>
           <SafeAreaProvider>
-            <View style={styles.root}>
+            <ForceUpdateGate>
+              <View style={styles.root}>
               {Platform.OS === 'android' ? (
                 <StatusBar
                   backgroundColor={showAppSplash ? '#F4FAFF' : '#F3F6FA'}
@@ -108,7 +110,8 @@ export default function RootApp() {
                   />
                 </View>
               ) : null}
-            </View>
+              </View>
+            </ForceUpdateGate>
           </SafeAreaProvider>
         </PaywallProvider>
       </PremiumProvider>

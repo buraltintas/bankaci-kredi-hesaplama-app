@@ -46,7 +46,7 @@ const SettingsScreen = () => {
     Alert.alert(
       restored ? 'Geri yüklendi' : 'Satın alma bulunamadı',
       restored
-        ? 'Reklamsız kullanım hesabınıza tanımlandı.'
+        ? 'Bankacı Premium hesabınıza tanımlandı.'
         : 'Mağaza hesabınızda aktif bir abonelik bulunamadı.'
     );
   }, []);
@@ -93,13 +93,11 @@ const SettingsScreen = () => {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>
-            {isPremium ? 'Reklamsız kullanım' : 'Reklamları kaldır'}
-          </Text>
+          <Text style={styles.sectionTitle}>Bankacı Premium</Text>
           <Text style={styles.paragraph}>
             {isPremium
-              ? 'Reklamsız kullanım aktif. Uygulamada banner ve geçiş reklamı gösterilmiyor.'
-              : 'Banner ve geçiş reklamlarını tamamen kapatın, tüm hesaplama özellikleri açık kalsın.'}
+              ? 'Premium üyeliğiniz aktif. Tüm gelişmiş hesaplama araçları açık ve reklamlar kapalı.'
+              : 'Konut kredisi devir hesaplama, gelişmiş ödeme planları, PDF paylaşımı ve reklamsız kullanım.'}
           </Text>
 
           {isPremium ? (
@@ -115,7 +113,7 @@ const SettingsScreen = () => {
           ) : (
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel="Reklamsız seçenekleri gör"
+              accessibilityLabel="Premium seçeneklerini gör"
               style={styles.primaryButton}
               onPress={openPaywall}
             >
