@@ -136,16 +136,48 @@ eas submit --platform ios --latest
 
 Not: `eas.json` içinde production build için `autoIncrement` açıktır ve `appVersionSource` remote olarak ayarlanmıştır. EAS, store build numaralarını remote version bilgisine göre artırabilir.
 
+## Android Force Update Release Prosedürü
+
+`force-update.json` repoda tutulur ve **her Android production sürümünde mutlaka kontrol edilip güncellenmelidir**. Lokal `android/app/build.gradle` değeri yerine EAS production build sonucunda görünen gerçek `versionCode` esas alınmalıdır.
+
+Her Android release için:
+
+1. Production AAB build'ini oluştur ve EAS'in verdiği gerçek `versionCode` değerini not al.
+2. Build'i Google Play'e gönder ve yeni sürümün kullanıcılar tarafından indirilebilir olduğunu doğrula.
+3. `force-update.json` içindeki `latestVersionCode` değerini her seferinde yeni production `versionCode` ile güncelle.
+4. Eski sürümleri zorunlu olarak kapatmak isteniyorsa `minimumVersionCode` değerini desteklenen en düşük build numarasına yükselt.
+5. Force update kullanılmayacaksa `enabled` değerini `false` yap; kullanılacaksa `true` bırak.
+6. JSON değişikliğini commit edip `main` branch'ine pushla.
+
+Örnek:
+
+```json
+{
+  "android": {
+    "enabled": true,
+    "minimumVersionCode": 18,
+    "latestVersionCode": 18,
+    "storeUrl": "https://play.google.com/store/apps/details?id=com.xewor.bankacikredihesaplama",
+    "message": "Bankacı'yı kullanmaya devam etmek için uygulamanızı güncelleyin."
+  }
+}
+```
+
+Yeni sürüm Google Play'de erişilebilir olmadan `minimumVersionCode` yükseltilmemelidir. Aksi durumda kullanıcı güncelleyebileceği bir sürüm bulunmadan uygulamada kilitlenebilir.
+
+Uygulama yapılandırmayı public `raw.githubusercontent.com` adresinden okur. Repo private yapılacaksa önce `force-update.json` herkese açık kalıcı bir adrese taşınmalı ve `src/update/forceUpdateService.ts` içindeki URL güncellenmelidir.
+
 ## Sürüm Bilgisi
 
 Mevcut uygulama sürümü:
 
-- App version: `2.1.1`
+- App version: `3.1.0`
 - Android package: `com.xewor.bankacikredihesaplama`
 - iOS bundle identifier: `com.xewor.bankacikredihesaplama`
 
 ## Proje Yapısı
 
+- `TODO.md`: release doğrulamaları ve ürün geliştirme yol haritası
 - `components/LoanCalculator.js`: ana form, geçmiş, PDF/paylaşım aksiyonları
 - `components/LoanResult.js`: sonuç ekranı ve ödeme planı görünümü
 - `src/domain/loan/calculateLoan.ts`: hesaplama motoru
@@ -174,3 +206,4 @@ Ardından gerçek cihazda en az şu akışlar manuel kontrol edilmelidir:
 - Paylaşım
 - Geçmişten hesaplama açma
 - Reklam hazır / hazır değil senaryoları
+- Android production `versionCode` ile `force-update.json` kontrolü
