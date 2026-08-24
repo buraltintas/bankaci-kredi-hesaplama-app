@@ -3,6 +3,7 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,6 +12,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { colors, radius, spacing } from '../design/tokens';
+import { useKeyboardVisibility } from '../hooks/useKeyboardVisibility';
 
 const BUTTON_HEIGHT = 54;
 const BAR_VERTICAL_PADDING = spacing.lg;
@@ -46,6 +48,7 @@ const CalculateActionBar = ({
   label = 'Hesapla',
   iconName = 'zap',
 }: CalculateActionBarProps) => {
+  const isKeyboardVisible = useKeyboardVisibility();
   const sweep = useRef(new Animated.Value(0)).current;
   const fade = useRef(new Animated.Value(0)).current;
   const [barWidth, setBarWidth] = useState(0);
@@ -108,6 +111,10 @@ const CalculateActionBar = ({
     inputRange: [0, 1],
     outputRange: [-barWidth, 0],
   });
+
+  if (Platform.OS === 'android' && isKeyboardVisible) {
+    return null;
+  }
 
   return (
     <View

@@ -16,7 +16,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useFocusEffect, useScrollToTop } from '@react-navigation/native';
+import { useScrollToTop } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LOAN_TYPES } from '../utils/constants';
@@ -61,6 +61,7 @@ import {
   parseNumericInput,
   sanitizeNumericInput,
 } from '../src/utils/sanitizeNumericInput';
+import { useCalculatorScroll } from '../src/hooks/useCalculatorScroll';
 
 const today = startOfLocalDay(new Date());
 const ACTION_BUTTON_HEIGHT = 54;
@@ -90,7 +91,6 @@ const LoanCalculator = () => {
   const appStateRef = useRef(AppState.currentState);
   const scrollViewRef = useRef(null);
   const resultRef = useRef(null);
-  const resultAnchorY = useRef(0);
   const [loanType, setLoanType] = useState('Bireysel İhtiyaç/Taşıt Kredisi');
   const [amount, setAmount] = useState('');
   const [interestRate, setInterestRate] = useState('');
@@ -135,18 +135,13 @@ const LoanCalculator = () => {
   } = useInterstitialAction();
   const { isPremium } = usePremium();
   const { openPaywall } = usePaywall();
+  const { onResultLayout, scrollToResult } = useCalculatorScroll({
+    scrollViewRef,
+    result,
+    keyboardExtraOffset: spacing.xxl * 2,
+  });
 
   useScrollToTop(scrollViewRef);
-  useFocusEffect(
-    React.useCallback(() => {
-      const frame = requestAnimationFrame(() => {
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      });
-
-      return () => cancelAnimationFrame(frame);
-    }, [])
-  );
-
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
@@ -219,15 +214,6 @@ const LoanCalculator = () => {
   const clearResult = () => {
     setResult(null);
     setFormError('');
-  };
-
-  const scrollToResultSoon = () => {
-    globalThis.setTimeout(() => {
-      scrollViewRef.current?.scrollTo({
-        y: Math.max(0, resultAnchorY.current - 8),
-        animated: true,
-      });
-    }, 120);
   };
 
   const buildFormSnapshot = () => ({
@@ -640,7 +626,7 @@ const LoanCalculator = () => {
         .then(setRecentCalculations)
         .catch(() => undefined);
 
-      scrollToResultSoon();
+      scrollToResult();
     } catch (error) {
       const message =
         error instanceof Error
@@ -690,7 +676,7 @@ const LoanCalculator = () => {
       );
 
       setResult(nextResult);
-      scrollToResultSoon();
+      scrollToResult();
     } catch {
       Alert.alert(
         'Son hesaplama',
@@ -1520,11 +1506,7 @@ const LoanCalculator = () => {
           ) : null}
 
           {result ? (
-            <View
-              onLayout={(event) => {
-                resultAnchorY.current = event.nativeEvent.layout.y;
-              }}
-            >
+            <View onLayout={onResultLayout}>
               <LoanResult
                 resultRef={resultRef}
                 result={result}

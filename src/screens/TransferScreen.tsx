@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -28,6 +27,7 @@ import type { TransferComparison } from '../domain/transfer/types';
 import { buildTransferShareMessage } from '../domain/transfer/shareSummary';
 import { formatCurrency } from '../utils/formatCurrency';
 import { parseNumericInput } from '../utils/sanitizeNumericInput';
+import { useCalculatorScroll } from '../hooks/useCalculatorScroll';
 
 const ACTION_BUTTON_HEIGHT = 54;
 const ACTION_BAR_VERTICAL_PADDING = spacing.lg;
@@ -41,7 +41,6 @@ const TransferScreen = () => {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const scrollViewRef = useRef<ScrollView>(null);
-  const resultAnchorY = useRef(0);
   const resultRef = useRef<ViewShot>(null);
 
   const [mode, setMode] = useState<TransferMode>('payoff');
@@ -66,17 +65,17 @@ const TransferScreen = () => {
 
   const [formError, setFormError] = useState('');
   const [result, setResult] = useState<TransferComparison | null>(null);
+  const { onResultLayout, scrollToResult } = useCalculatorScroll({
+    scrollViewRef,
+    result,
+    keyboardExtraOffset: spacing.xxl * 2,
+    dismissKeyboardOnIos: true,
+  });
 
   useScrollToTop(scrollViewRef);
   useFocusEffect(
     useCallback(() => {
       setFormError('');
-
-      const frame = requestAnimationFrame(() => {
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      });
-
-      return () => cancelAnimationFrame(frame);
     }, [])
   );
 
@@ -131,15 +130,6 @@ const TransferScreen = () => {
   const handleChangeCompensationRate = useCallback((value: string) => {
     setHasEditedCompensation(true);
     setCompensationRate(value);
-  }, []);
-
-  const scrollToResultSoon = useCallback(() => {
-    globalThis.setTimeout(() => {
-      scrollViewRef.current?.scrollTo({
-        y: Math.max(0, resultAnchorY.current - 8),
-        animated: true,
-      });
-    }, 120);
   }, []);
 
   const handleCalculate = useCallback(() => {
@@ -228,10 +218,9 @@ const TransferScreen = () => {
         });
       }
 
-      Keyboard.dismiss();
       setResult(comparison);
       setFormError('');
-      scrollToResultSoon();
+      scrollToResult();
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : 'Hesaplama yapılamadı.'
@@ -249,7 +238,7 @@ const TransferScreen = () => {
     payoffAmount,
     remainingInstallments,
     remainingTerm,
-    scrollToResultSoon,
+    scrollToResult,
   ]);
 
   const handleShare = useCallback(async () => {
@@ -510,11 +499,7 @@ const TransferScreen = () => {
           ) : null}
 
           {result ? (
-            <View
-              onLayout={(event) => {
-                resultAnchorY.current = event.nativeEvent.layout.y;
-              }}
-            >
+            <View onLayout={onResultLayout}>
               <ViewShot ref={resultRef} options={{ format: 'jpg', quality: 0.9 }}>
                 <View style={styles.card}>
                   <Text style={styles.sectionTitle}>Sonuç</Text>

@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -31,6 +30,7 @@ import {
 import { startOfLocalDay } from '../utils/dateMath';
 import { formatCurrency } from '../utils/formatCurrency';
 import { parseNumericInput } from '../utils/sanitizeNumericInput';
+import { useCalculatorScroll } from '../hooks/useCalculatorScroll';
 
 const ACTION_BUTTON_HEIGHT = 54;
 const ACTION_BAR_VERTICAL_PADDING = spacing.lg;
@@ -46,7 +46,6 @@ const DepositScreen = () => {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const scrollViewRef = useRef<ScrollView>(null);
-  const resultAnchorY = useRef(0);
   const resultRef = useRef<ViewShot>(null);
   const { isInterstitialActionRunning, runActionWithOptionalInterstitial } =
     useInterstitialAction();
@@ -62,17 +61,17 @@ const DepositScreen = () => {
     useState(false);
   const [formError, setFormError] = useState('');
   const [result, setResult] = useState<DepositCalculationResult | null>(null);
+  const { onResultLayout, scrollToResult } = useCalculatorScroll({
+    scrollViewRef,
+    result,
+    keyboardExtraOffset: spacing.xxl * 2,
+    dismissKeyboardOnIos: true,
+  });
 
   useScrollToTop(scrollViewRef);
   useFocusEffect(
     useCallback(() => {
       setFormError('');
-
-      const frame = requestAnimationFrame(() => {
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      });
-
-      return () => cancelAnimationFrame(frame);
     }, [])
   );
 
@@ -127,15 +126,6 @@ const DepositScreen = () => {
     setAnnualRate(nextValue);
   }, []);
 
-  const scrollToResultSoon = useCallback(() => {
-    globalThis.setTimeout(() => {
-      scrollViewRef.current?.scrollTo({
-        y: Math.max(0, resultAnchorY.current - 8),
-        animated: true,
-      });
-    }, 120);
-  }, []);
-
   const handleCalculate = useCallback(() => {
     const parsedPrincipal = parseNumericInput(principal, 'money');
     const parsedAnnualRate = parseNumericInput(annualRate, 'decimal');
@@ -167,7 +157,6 @@ const DepositScreen = () => {
     }
 
     try {
-      Keyboard.dismiss();
       setResult(
         calculateDeposit({
           principal: parsedPrincipal.value,
@@ -178,14 +167,14 @@ const DepositScreen = () => {
         })
       );
       setFormError('');
-      scrollToResultSoon();
+      scrollToResult();
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : 'Hesaplama yapılamadı.'
       );
       setResult(null);
     }
-  }, [annualRate, principal, scrollToResultSoon, termDays, withholdingRate]);
+  }, [annualRate, principal, scrollToResult, termDays, withholdingRate]);
 
   const handleShare = useCallback(async () => {
     if (!result) {
@@ -322,11 +311,7 @@ const DepositScreen = () => {
           ) : null}
 
           {result ? (
-            <View
-              onLayout={(event) => {
-                resultAnchorY.current = event.nativeEvent.layout.y;
-              }}
-            >
+            <View onLayout={onResultLayout}>
               <ViewShot ref={resultRef} options={{ format: 'jpg', quality: 0.9 }}>
                 <View style={styles.card}>
                   <Text style={styles.sectionTitle}>Sonuç</Text>

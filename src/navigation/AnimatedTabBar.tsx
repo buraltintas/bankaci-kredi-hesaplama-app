@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, premium, spacing, typography } from '../design/tokens';
+import { useKeyboardVisibility } from '../hooks/useKeyboardVisibility';
 
 const BAR_CONTENT_HEIGHT = 56;
 const INDICATOR_WIDTH = 28;
@@ -103,10 +104,12 @@ const AnimatedTabBar = ({
   premiumRouteNames?: readonly string[];
   showPremiumBadges?: boolean;
 }) => {
+  const isKeyboardVisible = useKeyboardVisibility();
   const insets = useSafeAreaInsets();
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [barWidth, setBarWidth] = useState(0);
   const indicatorX = useRef(new Animated.Value(0)).current;
+  const wasKeyboardVisible = useRef(isKeyboardVisible);
 
   const tabWidth = state.routes.length > 0 ? barWidth / state.routes.length : 0;
   const bottomPadding =
@@ -138,13 +141,17 @@ const AnimatedTabBar = ({
   }, []);
 
   useEffect(() => {
-    if (tabWidth === 0) {
+    const didRevealAfterKeyboard =
+      wasKeyboardVisible.current && !isKeyboardVisible;
+    wasKeyboardVisible.current = isKeyboardVisible;
+
+    if (isKeyboardVisible || tabWidth === 0) {
       return;
     }
 
     const target = tabWidth * state.index + (tabWidth - INDICATOR_WIDTH) / 2;
 
-    if (prefersReducedMotion) {
+    if (prefersReducedMotion || didRevealAfterKeyboard) {
       indicatorX.setValue(target);
       return;
     }
@@ -160,7 +167,11 @@ const AnimatedTabBar = ({
     animation.start();
 
     return () => animation.stop();
-  }, [indicatorX, prefersReducedMotion, state.index, tabWidth]);
+  }, [indicatorX, isKeyboardVisible, prefersReducedMotion, state.index, tabWidth]);
+
+  if (Platform.OS === 'android' && isKeyboardVisible) {
+    return null;
+  }
 
   return (
     <View
