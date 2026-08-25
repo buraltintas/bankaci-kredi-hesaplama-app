@@ -31,6 +31,8 @@ import { startOfLocalDay } from '../utils/dateMath';
 import { formatCurrency } from '../utils/formatCurrency';
 import { parseNumericInput } from '../utils/sanitizeNumericInput';
 import { useCalculatorScroll } from '../hooks/useCalculatorScroll';
+import { buildDepositAnalyticsEvent } from '../analytics/calculationEvents';
+import { trackCalculation } from '../analytics/analyticsStorage';
 
 const ACTION_BUTTON_HEIGHT = 54;
 const ACTION_BAR_VERTICAL_PADDING = spacing.lg;
@@ -157,16 +159,18 @@ const DepositScreen = () => {
     }
 
     try {
-      setResult(
-        calculateDeposit({
+      const nextResult = calculateDeposit({
           principal: parsedPrincipal.value,
           annualInterestRatePercent: parsedAnnualRate.value,
           termDays: parsedTerm.value,
           withholdingTaxRatePercent: parsedWithholding.value,
           startDate: startOfLocalDay(new Date()),
-        })
-      );
+        });
+      setResult(nextResult);
       setFormError('');
+      void trackCalculation(buildDepositAnalyticsEvent(nextResult)).catch(
+        () => undefined
+      );
       scrollToResult();
     } catch (error) {
       setFormError(

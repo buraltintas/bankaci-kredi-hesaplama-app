@@ -62,6 +62,8 @@ import {
   sanitizeNumericInput,
 } from '../src/utils/sanitizeNumericInput';
 import { useCalculatorScroll } from '../src/hooks/useCalculatorScroll';
+import { buildLoanAnalyticsEvent } from '../src/analytics/calculationEvents';
+import { trackCalculation } from '../src/analytics/analyticsStorage';
 
 const today = startOfLocalDay(new Date());
 const ACTION_BUTTON_HEIGHT = 54;
@@ -621,6 +623,10 @@ const LoanCalculator = () => {
 
       setResult(nextResult);
       setFormError('');
+
+      void trackCalculation(
+        buildLoanAnalyticsEvent({ loanType, input: loanInput, result: nextResult })
+      ).catch(() => undefined);
 
       addRecentCalculation(formSnapshot, nextResult, recentCalculations)
         .then(setRecentCalculations)

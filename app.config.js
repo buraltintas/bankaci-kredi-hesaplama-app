@@ -48,6 +48,16 @@ module.exports = ({ config: generatedConfig }) => {
     ...config,
     plugins: [
       ...(config.plugins || []),
+      'expo-secure-store',
+      'expo-notifications',
+      [
+        'expo-image-picker',
+        {
+          photosPermission:
+            'Profil veya gönderi fotoğrafı seçebilmeniz için fotoğraf arşivinize erişim gerekir.',
+          microphonePermission: false,
+        },
+      ],
       [
         'react-native-google-mobile-ads',
         {

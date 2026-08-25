@@ -27,6 +27,9 @@ import {
   ABOUT_WEBSITE_LABEL,
   ABOUT_WEBSITE_URL,
 } from '../content/about';
+import { ProfileCard } from '../auth/ProfileCard';
+import { PushNotificationCard } from '../notifications/PushNotificationCard';
+import { AnalyticsPrivacyCard } from '../analytics/AnalyticsPrivacyCard';
 
 const getAppVersion = (): string => {
   return Constants.expoConfig?.version ?? '—';
@@ -37,6 +40,7 @@ const SettingsScreen = () => {
   const { isPremium } = usePremium();
   const { openPaywall } = usePaywall();
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isPrivacyExpanded, setIsPrivacyExpanded] = useState(false);
 
   const handleRestore = useCallback(async () => {
     setIsRestoring(true);
@@ -93,6 +97,14 @@ const SettingsScreen = () => {
         </View>
 
         <View style={styles.card}>
+          <ProfileCard />
+        </View>
+
+        <View style={styles.card}>
+          <PushNotificationCard />
+        </View>
+
+        <View style={styles.card}>
           <Text style={styles.sectionTitle}>Bankacı Premium</Text>
           <Text style={styles.paragraph}>
             {isPremium
@@ -146,6 +158,31 @@ const SettingsScreen = () => {
             <Text style={styles.paragraphStrong}>{ABOUT_CREDIT_NAME}</Text>
             {ABOUT_CREDIT_SUFFIX}
           </Text>
+        </View>
+
+        <View style={styles.card}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Gizlilik ve veriler"
+            accessibilityState={{ expanded: isPrivacyExpanded }}
+            onPress={() => setIsPrivacyExpanded((current) => !current)}
+            style={styles.accordionHeader}
+          >
+            <View style={styles.accordionTitleRow}>
+              <Feather name="shield" size={19} color={colors.primary} />
+              <Text style={styles.accordionTitle}>Gizlilik ve veriler</Text>
+            </View>
+            <Feather
+              name={isPrivacyExpanded ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={colors.textMuted}
+            />
+          </TouchableOpacity>
+          {isPrivacyExpanded ? (
+            <View style={styles.accordionContent}>
+              <AnalyticsPrivacyCard />
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.card}>
@@ -218,6 +255,28 @@ const styles = StyleSheet.create({
     fontSize: typography.sectionTitle,
     fontWeight: '700',
     marginBottom: spacing.md,
+  },
+  accordionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 44,
+  },
+  accordionTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  accordionTitle: {
+    color: colors.text,
+    fontSize: typography.sectionTitle,
+    fontWeight: '700',
+  },
+  accordionContent: {
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    marginTop: spacing.md,
+    paddingTop: spacing.lg,
   },
   paragraph: {
     color: colors.textMuted,

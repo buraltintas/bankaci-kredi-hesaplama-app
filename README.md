@@ -24,6 +24,28 @@ Uygulama standart kredi hesaplamasının yanında bankacılıkta sık kullanıla
 - Son 20 hesaplama geçmişi
 - AdMob interstitial reklam akışı
 - Android ve iOS native development build desteği
+- E-posta + tek kullanımlık kodla Bankacı hesabı
+- SecureStore'da kalıcı 90 günlük session ve açık kullanıcı çıkışı
+- İsim, isteğe bağlı banka/görev/biyografi ve GCS avatar profili
+- Public feed okuma; Premium kullanıcı için profil bilgili paylaşım
+
+## Üyelik ve session davranışı
+
+- Session token yalnız işletim sisteminin güvenli `SecureStore` alanında tutulur;
+  uygulama yeniden açıldığında geçerliyse otomatik geri yüklenir.
+- Geçici internet, timeout, API `5xx` veya RevenueCat erişim sorunu kullanıcıyı
+  logout etmez; cached session ve Premium durumu korunur.
+- Session yalnız süresi dolduğunda, API kesin `401 Unauthorized` döndürdüğünde
+  veya kullanıcı Ayarlar'daki “Hesaptan çık” butonunu onayladığında temizlenir.
+- Logout yerel tokenı önce siler, backend sessionını revoke etmeyi ve cihaz push
+  tokenını kapatmayı best-effort tamamlar; RevenueCat cihazı guest kimliğine döner.
+- Profil adı zorunludur. Banka/kurum, görev/unvan, biyografi ve avatar isteğe
+  bağlıdır. Feed sorguları yazarın güncel profilini kullanıcı tablosundan okur.
+- RevenueCat entitlement kimliği opaque `rc_...` olarak kalır. Doğrulanmış hesap
+  e-postası destek sırasında RevenueCat panelinde kullanıcıyı bulabilmek için
+  RevenueCat subscriber attribute olarak aktarılır. Bu metadata aktarımındaki
+  ağ hatası login veya Premium erişimini bozmaz; çevrimiçi olduğunda yeniden
+  denenir.
 
 ## Teknoloji
 

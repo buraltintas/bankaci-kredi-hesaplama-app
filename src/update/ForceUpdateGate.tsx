@@ -14,8 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors, radius, shadows, spacing, typography } from '../design/tokens';
 import {
-  getAndroidUpdateRequirement,
-  type AndroidUpdateRequirement,
+  getAppUpdateRequirement,
+  type AppUpdateRequirement,
 } from './forceUpdateService';
 
 type AndroidInAppUpdateModule = {
@@ -26,32 +26,39 @@ const androidInAppUpdate = NativeModules.AndroidInAppUpdate as
   | AndroidInAppUpdateModule
   | undefined;
 
-const openPlayStore = async (webStoreUrl: string): Promise<void> => {
+const openStore = async (
+  requirement: AppUpdateRequirement
+): Promise<void> => {
+  if (requirement.platform === 'ios') {
+    await Linking.openURL(requirement.policy.storeUrl);
+    return;
+  }
+
   const marketUrl =
     'market://details?id=com.xewor.bankacikredihesaplama';
 
   try {
     await Linking.openURL(marketUrl);
   } catch {
-    await Linking.openURL(webStoreUrl);
+    await Linking.openURL(requirement.policy.storeUrl);
   }
 };
 
 const ForceUpdateGate = ({ children }: PropsWithChildren) => {
   const [requirement, setRequirement] =
-    useState<AndroidUpdateRequirement | null>(null);
+    useState<AppUpdateRequirement | null>(null);
   const [isStartingUpdate, setIsStartingUpdate] = useState(false);
   const [updateError, setUpdateError] = useState('');
 
   const refreshRequirement = useCallback(async () => {
-    const nextRequirement = await getAndroidUpdateRequirement();
+    const nextRequirement = await getAppUpdateRequirement();
     setRequirement(nextRequirement);
   }, []);
 
   useEffect(() => {
     void refreshRequirement();
 
-    if (Platform.OS !== 'android') {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
       return undefined;
     }
 
@@ -74,17 +81,19 @@ const ForceUpdateGate = ({ children }: PropsWithChildren) => {
 
     try {
       const didStartImmediateUpdate =
-        (await androidInAppUpdate?.startImmediateUpdate()) ?? false;
+        requirement.platform === 'android'
+          ? (await androidInAppUpdate?.startImmediateUpdate()) ?? false
+          : false;
 
       if (!didStartImmediateUpdate) {
-        await openPlayStore(requirement.policy.storeUrl);
+        await openStore(requirement);
       }
     } catch {
       try {
-        await openPlayStore(requirement.policy.storeUrl);
+        await openStore(requirement);
       } catch {
         setUpdateError(
-          'Google Play açılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.'
+          'Uygulama mağazası açılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.'
         );
       }
     } finally {
@@ -126,7 +135,9 @@ const ForceUpdateGate = ({ children }: PropsWithChildren) => {
             >
               <Feather name="refresh-cw" size={19} color={colors.surface} />
               <Text style={styles.updateButtonText}>
-                {isStartingUpdate ? 'Google Play açılıyor…' : 'Şimdi güncelle'}
+                {isStartingUpdate
+                  ? 'Uygulama mağazası açılıyor…'
+                  : 'Şimdi güncelle'}
               </Text>
             </TouchableOpacity>
           </View>

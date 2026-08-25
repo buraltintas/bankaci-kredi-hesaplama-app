@@ -1,7 +1,11 @@
 import {
   canExportPdf,
+  canCreateFeedPost,
+  canUseBankCampaigns,
+  canUseLeadForm,
   canUsePlanType,
   canUseTransfer,
+  canUseWidget,
   isPremiumPlanType,
 } from '../premiumFeatures';
 
@@ -39,5 +43,17 @@ describe('premium feature gating', () => {
   it('locks housing-loan transfer calculations to premium', () => {
     expect(canUseTransfer(false)).toBe(false);
     expect(canUseTransfer(true)).toBe(true);
+  });
+
+  it('reserves the new banker tools for premium', () => {
+    for (const gate of [
+      canCreateFeedPost,
+      canUseWidget,
+      canUseLeadForm,
+      canUseBankCampaigns,
+    ]) {
+      expect(gate(false)).toBe(false);
+      expect(gate(true)).toBe(true);
+    }
   });
 });

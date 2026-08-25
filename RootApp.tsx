@@ -7,6 +7,10 @@ import RootNavigator from './src/navigation/RootNavigator';
 import { PremiumProvider } from './src/subscription/PremiumProvider';
 import { PaywallProvider } from './src/subscription/PaywallProvider';
 import ForceUpdateGate from './src/update/ForceUpdateGate';
+import { AuthProvider } from './src/auth/AuthProvider';
+import { PushNotificationProvider } from './src/notifications/PushNotificationProvider';
+import { navigationRef } from './src/navigation/navigationRef';
+import { AnalyticsProvider } from './src/analytics/AnalyticsProvider';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -87,34 +91,45 @@ export default function RootApp() {
 
   return (
     <RootErrorBoundary>
-      <PremiumProvider>
-        <PaywallProvider>
-          <SafeAreaProvider>
-            <ForceUpdateGate>
-              <View style={styles.root}>
-              {Platform.OS === 'android' ? (
-                <StatusBar
-                  backgroundColor={showAppSplash ? '#F4FAFF' : '#F3F6FA'}
-                  barStyle="dark-content"
-                />
-              ) : null}
-              <NavigationContainer theme={navigationTheme}>
-                <RootNavigator />
-              </NavigationContainer>
-              {showAppSplash ? (
-                <View style={styles.appSplash} pointerEvents="none">
-                  <Image
-                    source={appSplashImage}
-                    style={styles.appSplashImage}
-                    resizeMode="cover"
-                  />
-                </View>
-              ) : null}
-              </View>
-            </ForceUpdateGate>
-          </SafeAreaProvider>
-        </PaywallProvider>
-      </PremiumProvider>
+      <AnalyticsProvider>
+        <AuthProvider>
+          <PushNotificationProvider>
+            <PremiumProvider>
+              <PaywallProvider>
+                <SafeAreaProvider>
+                  <ForceUpdateGate>
+                    <View style={styles.root}>
+                      {Platform.OS === 'android' ? (
+                        <StatusBar
+                          backgroundColor={
+                            showAppSplash ? '#F4FAFF' : '#F3F6FA'
+                          }
+                          barStyle="dark-content"
+                        />
+                      ) : null}
+                      <NavigationContainer
+                        ref={navigationRef}
+                        theme={navigationTheme}
+                      >
+                        <RootNavigator />
+                      </NavigationContainer>
+                      {showAppSplash ? (
+                        <View style={styles.appSplash} pointerEvents="none">
+                          <Image
+                            source={appSplashImage}
+                            style={styles.appSplashImage}
+                            resizeMode="cover"
+                          />
+                        </View>
+                      ) : null}
+                    </View>
+                  </ForceUpdateGate>
+                </SafeAreaProvider>
+              </PaywallProvider>
+            </PremiumProvider>
+          </PushNotificationProvider>
+        </AuthProvider>
+      </AnalyticsProvider>
     </RootErrorBoundary>
   );
 }

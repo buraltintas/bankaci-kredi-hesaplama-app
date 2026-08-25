@@ -7,6 +7,7 @@ import DepositScreen from '../screens/DepositScreen';
 import TransferScreen from '../screens/TransferScreen';
 import AnimatedTabBar from './AnimatedTabBar';
 import SettingsScreen from '../screens/SettingsScreen';
+import FeedScreen from '../screens/FeedScreen';
 import { usePremium } from '../subscription/PremiumProvider';
 import { usePaywall } from '../subscription/PaywallProvider';
 import { canUseTransfer } from '../subscription/premiumFeatures';
@@ -15,6 +16,7 @@ export type RootTabParamList = {
   Loan: undefined;
   Transfer: undefined;
   Deposit: undefined;
+  Feed: undefined;
   Settings: undefined;
 };
 
@@ -80,6 +82,17 @@ const RootNavigator = () => {
           tabBarAccessibilityLabel: 'Mevduat hesaplama',
           tabBarIcon: ({ color, size }) => (
             <Feather name="trending-up" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Feed"
+        component={FeedScreen}
+        options={{
+          title: 'Akış',
+          tabBarAccessibilityLabel: 'Bankacı topluluğu',
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="users" size={size} color={color} />
           ),
         }}
       />

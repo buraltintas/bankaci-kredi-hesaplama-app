@@ -28,6 +28,8 @@ import { buildTransferShareMessage } from '../domain/transfer/shareSummary';
 import { formatCurrency } from '../utils/formatCurrency';
 import { parseNumericInput } from '../utils/sanitizeNumericInput';
 import { useCalculatorScroll } from '../hooks/useCalculatorScroll';
+import { buildTransferAnalyticsEvent } from '../analytics/calculationEvents';
+import { trackCalculation } from '../analytics/analyticsStorage';
 
 const ACTION_BUTTON_HEIGHT = 54;
 const ACTION_BAR_VERTICAL_PADDING = spacing.lg;
@@ -220,6 +222,15 @@ const TransferScreen = () => {
 
       setResult(comparison);
       setFormError('');
+      void trackCalculation(
+        buildTransferAnalyticsEvent({
+          mode,
+          currentRate: parsedCurrentRate.value,
+          newRate: parsedNewRate.value,
+          commissionIncluded,
+          result: comparison,
+        })
+      ).catch(() => undefined);
       scrollToResult();
     } catch (error) {
       setFormError(

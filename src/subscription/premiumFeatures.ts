@@ -39,3 +39,15 @@ export const canExportPdf = (isPremium: boolean): boolean => isPremium;
 
 /** Housing-loan transfer calculations are available to premium holders only. */
 export const canUseTransfer = (isPremium: boolean): boolean => isPremium;
+
+/** Reading the community is free; publishing a new post or photo is premium. */
+export const canCreateFeedPost = (isPremium: boolean): boolean => isPremium;
+
+/** Home-screen quick calculation widgets are a premium surface. */
+export const canUseWidget = (isPremium: boolean): boolean => isPremium;
+
+/** Creating and managing customer request forms is premium. */
+export const canUseLeadForm = (isPremium: boolean): boolean => isPremium;
+
+/** Bank campaign discovery is reserved for premium bankers. */
+export const canUseBankCampaigns = (isPremium: boolean): boolean => isPremium;

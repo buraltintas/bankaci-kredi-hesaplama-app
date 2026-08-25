@@ -114,6 +114,78 @@ export const getRevenueCatAppUserId = async (): Promise<string | null> => {
   }
 };
 
+/**
+ * Connects a verified Bankacı account to RevenueCat. Existing anonymous
+ * purchases are preserved: if login ever drops an entitlement because the
+ * target identity already existed, syncing the store receipt moves it to the
+ * verified account under RevenueCat's transfer policy.
+ */
+export const identifyRevenueCatUser = async (
+  appUserId: string,
+  email?: string
+): Promise<boolean> => {
+  await initializePurchases();
+  const Purchases = loadPurchases();
+
+  if (!Purchases || !appUserId) return false;
+
+  try {
+    const before = await Purchases.getCustomerInfo();
+    const hadPremium = hasPremiumEntitlement(before);
+    const { customerInfo } = await Purchases.logIn(appUserId);
+    let resolvedInfo = customerInfo;
+
+    if (hadPremium && !hasPremiumEntitlement(customerInfo)) {
+      resolvedInfo = (await Purchases.syncPurchasesForResult()).customerInfo;
+    }
+
+    const isPremium = hasPremiumEntitlement(resolvedInfo);
+    setIsPremium(isPremium);
+
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (normalizedEmail) {
+      try {
+        // Keep the opaque rc_... value as the entitlement identity while also
+        // making the verified account discoverable by email in RevenueCat.
+        await Purchases.setEmail(normalizedEmail);
+      } catch {
+        // Subscriber attributes are support metadata. A temporary RevenueCat
+        // failure must never invalidate login or the resolved entitlement.
+      }
+    }
+
+    return isPremium;
+  } catch {
+    // The cached entitlement remains in force while offline. AuthProvider
+    // retries identification on the next launch.
+    return getIsPremiumAfterFailure();
+  }
+};
+
+/** Returns to guest mode without touching the App Store / Play purchase. */
+export const resetRevenueCatToGuest = async (): Promise<void> => {
+  const Purchases = loadPurchases();
+  if (!Purchases) return;
+
+  try {
+    if (!(await Purchases.isAnonymous())) {
+      const customerInfo = await Purchases.logOut();
+      setIsPremium(hasPremiumEntitlement(customerInfo));
+    }
+  } catch {
+    // Logout from the Bankacı API still succeeds; RevenueCat will be
+    // reconciled on the next successful SDK call. Never retain the previous
+    // account's entitlement for the next guest/account on this device.
+    setIsPremium(false);
+  }
+};
+
+const getIsPremiumAfterFailure = (): boolean => {
+  // The store is intentionally the only entitlement authority in the app;
+  // returning false here is only an operation result and does not mutate it.
+  return false;
+};
+
 export type PurchaseOutcome = 'purchased' | 'cancelled' | 'failed';
 
 export const purchasePremiumPackage = async (
