@@ -12,6 +12,8 @@ type PurchasesModule = typeof import('react-native-purchases').default;
 
 let purchasesModule: PurchasesModule | null | undefined;
 let configured = false;
+let initializationPromise: Promise<void> | null = null;
+let persistenceStarted = false;
 
 const loadPurchases = (): PurchasesModule | null => {
   if (Constants.appOwnership === 'expo') {
@@ -36,19 +38,27 @@ const hasPremiumEntitlement = (customerInfo: CustomerInfo): boolean => {
   return customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined;
 };
 
-/** Refreshes the entitlement after connectivity returns. */
-export const refreshPremiumStatus = async (): Promise<void> => {
+/** Refreshes the entitlement after connectivity returns or a support grant. */
+export const refreshPremiumStatus = async (
+  invalidateCache = false
+): Promise<boolean | null> => {
   const Purchases = loadPurchases();
 
   if (!Purchases) {
-    return;
+    return null;
   }
 
   try {
+    if (invalidateCache) {
+      await Purchases.invalidateCustomerInfoCache();
+    }
     const customerInfo = await Purchases.getCustomerInfo();
-    setIsPremium(hasPremiumEntitlement(customerInfo));
+    const isPremium = hasPremiumEntitlement(customerInfo);
+    setIsPremium(isPremium);
+    return isPremium;
   } catch {
     // Keep the cached/unknown state. Unknown users remain ad-free.
+    return null;
   }
 };
 
@@ -56,8 +66,13 @@ export const refreshPremiumStatus = async (): Promise<void> => {
  * Configures RevenueCat and starts tracking the premium entitlement.
  * Safe to call more than once; only the first call configures the SDK.
  */
-export const initializePurchases = async (): Promise<void> => {
-  startPersistingPremium();
+export const initializePurchases = async (
+  appUserId?: string
+): Promise<void> => {
+  if (!persistenceStarted) {
+    startPersistingPremium();
+    persistenceStarted = true;
+  }
   await hydratePremiumFromCache();
 
   const Purchases = loadPurchases();
@@ -67,18 +82,26 @@ export const initializePurchases = async (): Promise<void> => {
     return;
   }
 
-  try {
-    Purchases.configure({ apiKey });
-    configured = true;
+  if (!initializationPromise) {
+    initializationPromise = (async () => {
+      try {
+        Purchases.configure({ apiKey, appUserID: appUserId });
+        configured = true;
 
-    Purchases.addCustomerInfoUpdateListener((customerInfo) => {
-      setIsPremium(hasPremiumEntitlement(customerInfo));
+        Purchases.addCustomerInfoUpdateListener((customerInfo) => {
+          setIsPremium(hasPremiumEntitlement(customerInfo));
+        });
+
+        await refreshPremiumStatus();
+      } catch {
+        // Offline or misconfigured — the cached entitlement stays in effect.
+      }
+    })().finally(() => {
+      initializationPromise = null;
     });
-
-    await refreshPremiumStatus();
-  } catch {
-    // Offline or misconfigured — the cached entitlement stays in effect.
   }
+
+  await initializationPromise;
 };
 
 export const getPremiumOffering = async (): Promise<PurchasesOffering | null> => {
@@ -124,18 +147,32 @@ export const identifyRevenueCatUser = async (
   appUserId: string,
   email?: string
 ): Promise<boolean> => {
-  await initializePurchases();
+  await initializePurchases(appUserId);
   const Purchases = loadPurchases();
 
   if (!Purchases || !appUserId) return false;
 
   try {
+    const currentAppUserId = await Purchases.getAppUserID();
+    const currentIdentityIsAnonymous = await Purchases.isAnonymous();
     const before = await Purchases.getCustomerInfo();
     const hadPremium = hasPremiumEntitlement(before);
-    const { customerInfo } = await Purchases.logIn(appUserId);
+    const customerInfo =
+      currentAppUserId === appUserId
+        ? before
+        : (await Purchases.logIn(appUserId)).customerInfo;
     let resolvedInfo = customerInfo;
 
-    if (hadPremium && !hasPremiumEntitlement(customerInfo)) {
+    // A purchase made before Bankacı login belongs to the device's anonymous
+    // RevenueCat customer. Syncing the store receipt after login transfers it
+    // to the verified account under the project's restore behavior. Never do
+    // this while switching between two identified accounts; that could move
+    // one banker's purchase to another banker.
+    if (
+      currentIdentityIsAnonymous &&
+      hadPremium &&
+      !hasPremiumEntitlement(customerInfo)
+    ) {
       resolvedInfo = (await Purchases.syncPurchasesForResult()).customerInfo;
     }
 
@@ -252,4 +289,6 @@ export const getSubscriptionManagementUrl = async (): Promise<string | null> => 
 export const __resetPurchasesForTests = (): void => {
   purchasesModule = undefined;
   configured = false;
+  initializationPromise = null;
+  persistenceStarted = false;
 };

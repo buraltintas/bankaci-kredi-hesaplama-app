@@ -28,6 +28,13 @@ Uygulama standart kredi hesaplamasının yanında bankacılıkta sık kullanıla
 - SecureStore'da kalıcı 90 günlük session ve açık kullanıcı çıkışı
 - İsim, isteğe bağlı banka/görev/biyografi ve GCS avatar profili
 - Public feed okuma; Premium kullanıcı için profil bilgili paylaşım
+- Bireysel / Ticari kredi ayrımı; taksitli ticari, spot, rotatif/BCH ve çek/senet
+  iskonto hesaplamaları
+- Hareket bazlı rotatif faiz dönemleri, ticari hesaplama geçmişi ve paylaşım
+- Premium ticari PDF raporu
+
+Ticari ürünlerin formülleri, varsayımları ve resmî dayanakları için
+[`docs/COMMERCIAL_CALCULATIONS.md`](docs/COMMERCIAL_CALCULATIONS.md) belgesine bakın.
 
 ## Üyelik ve session davranışı
 

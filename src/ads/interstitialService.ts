@@ -44,6 +44,7 @@ const logInterstitialDebug = (message: string): void => {
 };
 
 const getActionLogLabel = (actionName: InterstitialActionName): string => {
+  if (actionName === 'calculate') return 'Calculate';
   if (actionName === 'pdf') return 'PDF';
   if (actionName === 'share') return 'Share';
 

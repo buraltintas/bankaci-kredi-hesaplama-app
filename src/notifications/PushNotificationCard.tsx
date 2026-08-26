@@ -17,8 +17,8 @@ export const PushNotificationCard = () => {
       </View>
       <Text style={styles.paragraph}>
         {enabled
-          ? 'Topluluk etkileşimleri için bildirimler bu cihazda açık.'
-          : 'Gönderilerinize gelen yorumları ve ileride yayınlanacak kampanya bildirimlerini kaçırmayın.'}
+          ? 'Müşteri talepleri, topluluk etkileşimleri ve önemli hesap gelişmeleri için bildirimler bu cihazda açık.'
+          : 'Talep linkleri, müşteri başvuruları, topluluk etkileşimleri ve önemli hesap gelişmelerini kaçırmayın.'}
       </Text>
       <TouchableOpacity
         style={styles.button}

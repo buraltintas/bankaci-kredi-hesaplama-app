@@ -2,6 +2,7 @@ import type { CustomerInfo } from 'react-native-purchases';
 import {
   __resetPurchasesForTests,
   identifyRevenueCatUser,
+  refreshPremiumStatus,
 } from '../purchases';
 import { __resetPremiumStoreForTests, getIsPremium } from '../premiumStore';
 
@@ -12,6 +13,9 @@ const mockPurchases = {
   configure: jest.fn(),
   addCustomerInfoUpdateListener: jest.fn(),
   getCustomerInfo: jest.fn(),
+  getAppUserID: jest.fn(),
+  isAnonymous: jest.fn(),
+  invalidateCustomerInfoCache: jest.fn(),
   logIn: jest.fn(),
   setEmail: jest.fn(),
   syncPurchasesForResult: jest.fn(),
@@ -30,6 +34,8 @@ describe('RevenueCat member identity migration', () => {
     __resetPurchasesForTests();
     __resetPremiumStoreForTests();
     mockPurchases.getCustomerInfo.mockResolvedValue(activeInfo);
+    mockPurchases.getAppUserID.mockResolvedValue('$RCAnonymousID:test');
+    mockPurchases.isAnonymous.mockResolvedValue(true);
   });
 
   it('syncs an existing anonymous purchase if login temporarily loses it', async () => {
@@ -54,6 +60,35 @@ describe('RevenueCat member identity migration', () => {
     expect(mockPurchases.syncPurchasesForResult).not.toHaveBeenCalled();
   });
 
+  it('does not transfer premium while switching between identified accounts', async () => {
+    mockPurchases.getAppUserID.mockResolvedValue('rc_first_member');
+    mockPurchases.isAnonymous.mockResolvedValue(false);
+    mockPurchases.logIn.mockResolvedValue({
+      customerInfo: freeInfo,
+      created: false,
+    });
+
+    await expect(
+      identifyRevenueCatUser('rc_second_member', 'second@example.com')
+    ).resolves.toBe(false);
+
+    expect(mockPurchases.logIn).toHaveBeenCalledWith('rc_second_member');
+    expect(mockPurchases.syncPurchasesForResult).not.toHaveBeenCalled();
+    expect(getIsPremium()).toBe(false);
+  });
+
+  it('configures directly with the verified identity when it is known at startup', async () => {
+    mockPurchases.getAppUserID.mockResolvedValue('rc_verified_user');
+
+    await identifyRevenueCatUser('rc_verified_user');
+
+    expect(mockPurchases.configure).toHaveBeenCalledWith({
+      apiKey: expect.any(String),
+      appUserID: 'rc_verified_user',
+    });
+    expect(mockPurchases.logIn).not.toHaveBeenCalled();
+  });
+
   it('keeps login and entitlement successful when the email attribute fails', async () => {
     mockPurchases.logIn.mockResolvedValue({ customerInfo: activeInfo, created: false });
     mockPurchases.setEmail.mockRejectedValue(new Error('offline'));
@@ -63,5 +98,12 @@ describe('RevenueCat member identity migration', () => {
     ).resolves.toBe(true);
 
     expect(getIsPremium()).toBe(true);
+  });
+
+  it('force-refreshes support grants without restoring the store receipt', async () => {
+    await expect(refreshPremiumStatus(true)).resolves.toBe(true);
+
+    expect(mockPurchases.invalidateCustomerInfoCache).toHaveBeenCalledTimes(1);
+    expect(mockPurchases.getCustomerInfo).toHaveBeenCalledTimes(1);
   });
 });

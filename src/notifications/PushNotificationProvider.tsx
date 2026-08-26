@@ -64,8 +64,9 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
   const ensureAndroidChannel = useCallback(async () => {
     if (Platform.OS !== 'android') return;
     await Notifications.setNotificationChannelAsync('social', {
-      name: 'Topluluk bildirimleri',
-      description: 'Gönderi ve yorum etkileşimleri',
+      name: 'Bankacı bildirimleri',
+      description:
+        'Müşteri talepleri, topluluk etkileşimleri ve hesap gelişmeleri',
       importance: Notifications.AndroidImportance.DEFAULT,
       vibrationPattern: [0, 200],
       lightColor: '#0B5CAD',

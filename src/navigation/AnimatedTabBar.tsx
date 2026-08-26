@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
+  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -12,7 +13,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, premium, spacing, typography } from '../design/tokens';
+import { useAuth } from '../auth/AuthProvider';
 import { useKeyboardVisibility } from '../hooks/useKeyboardVisibility';
+import { memberDisplayName } from '../utils/memberDisplayName';
 
 const BAR_CONTENT_HEIGHT = 56;
 const INDICATOR_WIDTH = 28;
@@ -32,6 +35,40 @@ const PremiumCrown = () => (
     style={styles.premiumBadge}
   />
 );
+
+const AccountTabIcon = ({
+  avatarUrl,
+  initial,
+  isFocused,
+}: {
+  avatarUrl: string | null;
+  initial: string;
+  isFocused: boolean;
+}) => {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const showImage = Boolean(avatarUrl && avatarUrl !== failedUrl);
+
+  return showImage ? (
+    <Image
+      accessibilityIgnoresInvertColors
+      onError={() => setFailedUrl(avatarUrl)}
+      source={{ uri: avatarUrl ?? undefined }}
+      style={[
+        styles.accountAvatar,
+        { borderColor: isFocused ? colors.primary : colors.border },
+      ]}
+    />
+  ) : (
+    <View
+      style={[
+        styles.accountAvatarFallback,
+        { backgroundColor: isFocused ? colors.primary : colors.primaryDark },
+      ]}
+    >
+      <Text style={styles.accountAvatarInitial}>{initial}</Text>
+    </View>
+  );
+};
 
 /**
  * Keeps the plain bar the app already had and only softens the moment of
@@ -104,6 +141,7 @@ const AnimatedTabBar = ({
   premiumRouteNames?: readonly string[];
   showPremiumBadges?: boolean;
 }) => {
+  const { user } = useAuth();
   const isKeyboardVisible = useKeyboardVisibility();
   const insets = useSafeAreaInsets();
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -205,6 +243,7 @@ const AnimatedTabBar = ({
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;
           const isPremiumRoute = premiumRouteNames.includes(route.name);
+          const showsAccountAvatar = route.name === 'Settings' && user !== null;
           const label = options.title ?? route.name;
           const defaultColor = isFocused ? colors.primary : colors.textMuted;
           const itemColor = isPremiumRoute ? premium.accent : defaultColor;
@@ -240,11 +279,22 @@ const AnimatedTabBar = ({
                 {isPremiumRoute && showPremiumBadges ? (
                   <PremiumCrown />
                 ) : null}
-                {options.tabBarIcon?.({
-                  focused: isFocused,
-                  color: itemColor,
-                  size: 22,
-                })}
+                {showsAccountAvatar ? (
+                  <AccountTabIcon
+                    avatarUrl={user.avatarUrl}
+                    initial={memberDisplayName(user.displayName, user.email)
+                      .trim()
+                      .slice(0, 1)
+                      .toLocaleUpperCase('tr-TR')}
+                    isFocused={isFocused}
+                  />
+                ) : (
+                  options.tabBarIcon?.({
+                    focused: isFocused,
+                    color: itemColor,
+                    size: 22,
+                  })
+                )}
                 <Text
                   style={[styles.label, { color: itemColor }]}
                   numberOfLines={1}
@@ -295,6 +345,24 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -2,
     zIndex: 1,
+  },
+  accountAvatar: {
+    borderRadius: 13,
+    borderWidth: 2,
+    height: 26,
+    width: 26,
+  },
+  accountAvatarFallback: {
+    alignItems: 'center',
+    borderRadius: 13,
+    height: 26,
+    justifyContent: 'center',
+    width: 26,
+  },
+  accountAvatarInitial: {
+    color: colors.surface,
+    fontSize: 12,
+    fontWeight: '900',
   },
   label: {
     fontSize: typography.small,

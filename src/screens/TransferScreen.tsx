@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -35,11 +36,15 @@ const ACTION_BUTTON_HEIGHT = 54;
 const ACTION_BAR_VERTICAL_PADDING = spacing.lg;
 
 type TransferMode = 'payoff' | 'estimate';
+type Props = {
+  topContent?: React.ReactNode;
+  contentOpacity?: Animated.Value;
+};
 
 const formatRate = (value: number): string =>
   `%${value.toString().replace('.', ',')}`;
 
-const TransferScreen = () => {
+const TransferScreen = ({ topContent, contentOpacity }: Props) => {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -332,12 +337,21 @@ const TransferScreen = () => {
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={topContent ? [1] : undefined}
         >
           <View style={styles.header}>
             <Text style={styles.eyebrow}>Bankacı</Text>
-            <Text style={styles.title}>Kredi Transferi</Text>
+            <Text style={styles.title}>Konut Kredisi Devir</Text>
           </View>
 
+          {topContent}
+
+          <Animated.View
+            style={[
+              styles.animatedContent,
+              contentOpacity ? { opacity: contentOpacity } : null,
+            ]}
+          >
           <View style={styles.card}>
             <Text style={styles.helperText}>
               Konut kredinizi başka bankaya taşımanın kâr mı zarar mı
@@ -611,6 +625,7 @@ const TransferScreen = () => {
               </TouchableOpacity>
             </View>
           ) : null}
+          </Animated.View>
         </ScrollView>
 
         <CalculateActionBar
@@ -630,6 +645,9 @@ const styles = StyleSheet.create({
   },
   mainContainer: {
     flex: 1,
+  },
+  animatedContent: {
+    gap: spacing.lg,
   },
   scrollView: {
     flex: 1,

@@ -11,12 +11,21 @@ import {
 import Constants from 'expo-constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { Feather } from '@expo/vector-icons';
-import { colors, radius, shadows, spacing, typography } from '../design/tokens';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import {
+  colors,
+  premium,
+  radius,
+  shadows,
+  spacing,
+  typography,
+} from '../design/tokens';
 import { usePremium } from '../subscription/PremiumProvider';
 import { usePaywall } from '../subscription/PaywallProvider';
 import {
   getSubscriptionManagementUrl,
+  identifyRevenueCatUser,
+  refreshPremiumStatus,
   restorePremiumPurchases,
 } from '../subscription/purchases';
 import {
@@ -28,6 +37,7 @@ import {
   ABOUT_WEBSITE_URL,
 } from '../content/about';
 import { ProfileCard } from '../auth/ProfileCard';
+import { useAuth } from '../auth/AuthProvider';
 import { PushNotificationCard } from '../notifications/PushNotificationCard';
 import { AnalyticsPrivacyCard } from '../analytics/AnalyticsPrivacyCard';
 
@@ -38,9 +48,12 @@ const getAppVersion = (): string => {
 const SettingsScreen = () => {
   const tabBarHeight = useBottomTabBarHeight();
   const { isPremium } = usePremium();
+  const { user, deleteAccount } = useAuth();
   const { openPaywall } = usePaywall();
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isRefreshingPremium, setIsRefreshingPremium] = useState(false);
   const [isPrivacyExpanded, setIsPrivacyExpanded] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const handleRestore = useCallback(async () => {
     setIsRestoring(true);
@@ -54,6 +67,30 @@ const SettingsScreen = () => {
         : 'Mağaza hesabınızda aktif bir abonelik bulunamadı.'
     );
   }, []);
+
+  const handleRefreshPremium = useCallback(async () => {
+    setIsRefreshingPremium(true);
+    if (user) {
+      await identifyRevenueCatUser(user.revenueCatUserId, user.email);
+    }
+    const refreshed = await refreshPremiumStatus(true);
+    setIsRefreshingPremium(false);
+
+    if (refreshed === null) {
+      Alert.alert(
+        'Premium kontrol edilemedi',
+        'İnternet bağlantınızı kontrol edip tekrar deneyin.'
+      );
+      return;
+    }
+
+    Alert.alert(
+      refreshed ? 'Premium aktif' : 'Aktif Premium bulunamadı',
+      refreshed
+        ? 'Bankacı Premium erişiminiz yenilendi.'
+        : 'Hesabınızda aktif bir Bankacı Premium erişimi bulunamadı.'
+    );
+  }, [user]);
 
   const handleManageSubscription = useCallback(async () => {
     const managementUrl = await getSubscriptionManagementUrl();
@@ -81,6 +118,44 @@ const SettingsScreen = () => {
     }
   }, []);
 
+  const handleDeleteAccount = useCallback(() => {
+    Alert.alert(
+      'Bankacı hesabınızı silmek istiyor musunuz?',
+      'Profiliniz, paylaşımlarınız, yorumlarınız, oturumlarınız ve bildirim cihazlarınız kalıcı olarak silinir. Bu işlem mağaza aboneliğinizi otomatik olarak iptal etmez.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Devam et',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Bu işlem geri alınamaz',
+              'Hesabınızı ve hesabınıza bağlı kişisel verileri kalıcı olarak silmek için onaylayın.',
+              [
+                { text: 'Vazgeç', style: 'cancel' },
+                {
+                  text: 'Hesabımı kalıcı olarak sil',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setIsDeletingAccount(true);
+                    try {
+                      await deleteAccount();
+                      Alert.alert('Hesap silindi', 'Bankacı hesabınız ve ilişkili kişisel verileriniz silindi.');
+                    } catch {
+                      Alert.alert('Hesap silinemedi', 'Bağlantınızı kontrol edip tekrar deneyin.');
+                    } finally {
+                      setIsDeletingAccount(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  }, [deleteAccount]);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <ScrollView
@@ -105,7 +180,16 @@ const SettingsScreen = () => {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Bankacı Premium</Text>
+          <View style={styles.premiumTitleRow}>
+            <MaterialCommunityIcons
+              name="crown"
+              size={20}
+              color={premium.accent}
+            />
+            <Text style={[styles.sectionTitle, styles.premiumTitle]}>
+              Bankacı Premium
+            </Text>
+          </View>
           <Text style={styles.paragraph}>
             {isPremium
               ? 'Premium üyeliğiniz aktif. Tüm gelişmiş hesaplama araçları açık ve reklamlar kapalı.'
@@ -135,15 +219,37 @@ const SettingsScreen = () => {
 
           <TouchableOpacity
             accessibilityRole="button"
+            accessibilityLabel="Premium erişimini kontrol et"
+            style={styles.secondaryButton}
+            onPress={() => void handleRefreshPremium()}
+            disabled={isRefreshingPremium || isRestoring}
+          >
+            <Text style={styles.secondaryButtonText}>
+              {isRefreshingPremium
+                ? 'Premium kontrol ediliyor…'
+                : 'Premium erişimini kontrol et'}
+            </Text>
+            <Feather name="refresh-cw" size={17} color={colors.primary} />
+          </TouchableOpacity>
+          <Text style={styles.actionHint}>
+            Hesabınıza sonradan tanımlanan Premium erişimini kontrol eder.
+          </Text>
+
+          <TouchableOpacity
+            accessibilityRole="button"
             accessibilityLabel="Satın alımları geri yükle"
             style={styles.secondaryButton}
             onPress={() => void handleRestore()}
-            disabled={isRestoring}
+            disabled={isRestoring || isRefreshingPremium}
           >
             <Text style={styles.secondaryButtonText}>
               {isRestoring ? 'Geri yükleniyor…' : 'Satın alımları geri yükle'}
             </Text>
           </TouchableOpacity>
+          <Text style={styles.actionHint}>
+            App Store veya Google Play üzerinden daha önce yapılan satın
+            alımları geri getirir.
+          </Text>
         </View>
 
         <View style={styles.card}>
@@ -208,6 +314,27 @@ const SettingsScreen = () => {
             <Text style={styles.rowValue}>{getAppVersion()}</Text>
           </View>
         </View>
+
+        {user ? (
+          <View style={[styles.card, styles.dangerCard]}>
+            <Text style={styles.sectionTitle}>Hesap işlemleri</Text>
+            <Text style={styles.paragraph}>
+              Hesabınızı ve hesabınıza bağlı kişisel verileri kalıcı olarak silebilirsiniz.
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Hesabı kalıcı olarak sil"
+              disabled={isDeletingAccount}
+              onPress={handleDeleteAccount}
+              style={styles.deleteAccountButton}
+            >
+              <Feather name="trash-2" size={18} color={colors.danger} />
+              <Text style={styles.deleteAccountText}>
+                {isDeletingAccount ? 'Hesap siliniyor…' : 'Hesabı sil'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -254,6 +381,15 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.sectionTitle,
     fontWeight: '700',
+    marginBottom: spacing.md,
+  },
+  premiumTitle: {
+    marginBottom: 0,
+  },
+  premiumTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
     marginBottom: spacing.md,
   },
   accordionHeader: {
@@ -314,6 +450,13 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: '700',
   },
+  actionHint: {
+    color: colors.placeholder,
+    fontSize: 11,
+    lineHeight: 16,
+    paddingHorizontal: spacing.md,
+    textAlign: 'center',
+  },
   linkButton: {
     alignItems: 'center',
     alignSelf: 'flex-start',
@@ -341,6 +484,24 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.body,
     fontWeight: '700',
+  },
+  dangerCard: {
+    borderColor: 'rgba(198, 40, 40, 0.28)',
+  },
+  deleteAccountButton: {
+    alignItems: 'center',
+    borderColor: colors.danger,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  deleteAccountText: {
+    color: colors.danger,
+    fontSize: typography.body,
+    fontWeight: '800',
   },
 });
 

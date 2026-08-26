@@ -19,14 +19,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { PurchasesPackage } from 'react-native-purchases';
-import { colors, radius, spacing, typography } from '../design/tokens';
+import { colors, premium, radius, spacing, typography } from '../design/tokens';
 import { usePremium } from './PremiumProvider';
 import {
   getPremiumOffering,
   getRevenueCatAppUserId,
   purchasePremiumPackage,
+  refreshPremiumStatus,
   restorePremiumPurchases,
 } from './purchases';
 import {
@@ -129,6 +130,10 @@ export const PaywallProvider = ({ children }: PropsWithChildren) => {
     setIsLoadingOffering(true);
     setRevenueCatAppUserId(null);
 
+    // Support-granted/promotional entitlements live in RevenueCat rather than
+    // the App Store receipt, so refresh them without triggering a store login.
+    void refreshPremiumStatus(true);
+
     void getPremiumOffering()
       .then((offering) => {
         if (!isActive) return;
@@ -203,7 +208,14 @@ export const PaywallProvider = ({ children }: PropsWithChildren) => {
       >
         <View style={styles.sheet}>
           <View style={styles.sheetHeader}>
-            <Text style={styles.title}>{PAYWALL_TITLE}</Text>
+            <View style={styles.titleRow}>
+              <MaterialCommunityIcons
+                name="crown"
+                size={20}
+                color={premium.accent}
+              />
+              <Text style={styles.title}>{PAYWALL_TITLE}</Text>
+            </View>
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Kapat"
@@ -342,9 +354,14 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    flex: 1,
     fontSize: typography.sectionTitle,
     fontWeight: '800',
+  },
+  titleRow: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
   closeButton: {
     alignItems: 'center',

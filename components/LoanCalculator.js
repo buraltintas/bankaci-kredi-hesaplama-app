@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   AppState,
   KeyboardAvoidingView,
   Modal,
@@ -78,6 +79,15 @@ const PLAN_TYPE_LABELS = {
   decreasingInstallment: DECREASING_INSTALLMENT_PLAN_LABEL,
 };
 
+// The Bireysel/Ticari switch already supplies the product context. Keep the
+// legacy keys internally for tax defaults, analytics and saved-history
+// compatibility while showing shorter labels in the individual form.
+const LOAN_TYPE_DISPLAY_LABELS = {
+  'Bireysel İhtiyaç/Taşıt Kredisi': 'İhtiyaç/Taşıt Kredisi',
+  'Bireysel Konut Kredisi': 'Konut Kredisi',
+  Özel: 'Özel',
+};
+
 const isProgressiveInstallmentPlanType = (type) =>
   type === 'increasingInstallment' || type === 'decreasingInstallment';
 
@@ -87,7 +97,8 @@ const createCustomPaymentRow = () => ({
   amount: '',
 });
 
-const LoanCalculator = () => {
+/** @param {{ topContent?: React.ReactNode, contentOpacity?: Animated.Value | number }} props */
+const LoanCalculator = ({ topContent = null, contentOpacity = 1 }) => {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const appStateRef = useRef(AppState.currentState);
@@ -875,6 +886,7 @@ const LoanCalculator = () => {
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={topContent ? [1] : undefined}
         >
           <View style={styles.header}>
             <View>
@@ -883,8 +895,13 @@ const LoanCalculator = () => {
             </View>
           </View>
 
+          {topContent}
+
+          <Animated.View
+            style={[styles.animatedContent, { opacity: contentOpacity }]}
+          >
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Kredi Bilgileri</Text>
+            <Text style={styles.sectionTitle}>Bireysel Kredi Bilgileri</Text>
             <Text style={styles.label}>Kredi Tipi</Text>
             <View style={styles.loanTypeGroup}>
               {Object.keys(LOAN_TYPES).map((type) => {
@@ -905,7 +922,7 @@ const LoanCalculator = () => {
                         isSelected && styles.loanTypeTextSelected,
                       ]}
                     >
-                      {type}
+                      {LOAN_TYPE_DISPLAY_LABELS[type] ?? type}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -1524,6 +1541,7 @@ const LoanCalculator = () => {
               />
             </View>
           ) : null}
+          </Animated.View>
         </ScrollView>
 
         <CalculateActionBar
@@ -1544,6 +1562,9 @@ const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  animatedContent: {
+    gap: spacing.lg,
   },
   nativeRepaintGuard: {
     opacity: 0.999,

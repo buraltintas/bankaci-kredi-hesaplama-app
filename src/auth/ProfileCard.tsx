@@ -18,13 +18,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { apiRequest } from '../api/client';
 import type { Member } from '../api/types';
 import { colors, radius, spacing, typography } from '../design/tokens';
+import { memberDisplayName } from '../utils/memberDisplayName';
 import { useAuth } from './AuthProvider';
 
 const Avatar = ({ user, size = 52 }: { user: Member; size?: number }) => {
   if (user.avatarUrl) {
     return <Image source={{ uri: user.avatarUrl }} style={{ borderRadius: size / 2, height: size, width: size }} />;
   }
-  const initial = (user.displayName || user.email).slice(0, 1).toLocaleUpperCase('tr-TR');
+  const initial = memberDisplayName(user.displayName, user.email).slice(0, 1).toLocaleUpperCase('tr-TR');
   return (
     <View style={[styles.avatarFallback, { borderRadius: size / 2, height: size, width: size }]}>
       <Text style={styles.avatarInitial}>{initial}</Text>
@@ -41,7 +42,7 @@ export const ProfileCard = () => {
 
   const openEditor = () => {
     if (!user) return;
-    setForm({ displayName: user.displayName, bio: user.bio, bankName: user.bankName, jobTitle: user.jobTitle });
+    setForm({ displayName: memberDisplayName(user.displayName, user.email), bio: user.bio, bankName: user.bankName, jobTitle: user.jobTitle });
     setEditing(true);
   };
 
@@ -119,9 +120,12 @@ export const ProfileCard = () => {
       <View style={styles.profileRow}>
         <Avatar user={user} />
         <View style={styles.profileText}>
-          <Text style={styles.name}>{user.displayName || 'İsmini ekle'}</Text>
+          <Text style={styles.name}>{memberDisplayName(user.displayName, user.email)}</Text>
           <Text style={styles.email}>{user.email}</Text>
           {user.jobTitle || user.bankName ? <Text style={styles.meta}>{[user.bankName, user.jobTitle].filter(Boolean).join(' · ')}</Text> : null}
+          <Text selectable style={styles.supportId}>
+            Destek Kimliği: {user.revenueCatUserId}
+          </Text>
         </View>
       </View>
       <TouchableOpacity style={styles.outlineButton} onPress={openEditor}><Feather name="edit-2" size={16} color={colors.primary} /><Text style={styles.outlineText}>Profili düzenle</Text></TouchableOpacity>
@@ -154,5 +158,5 @@ export const ProfileCard = () => {
 };
 
 const styles = StyleSheet.create({
-  title: { color: colors.text, fontSize: typography.sectionTitle, fontWeight: '700', marginBottom: spacing.md }, paragraph: { color: colors.textMuted, fontSize: typography.body, lineHeight: 22, marginBottom: spacing.md }, primaryButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radius.md, justifyContent: 'center', minHeight: 48, paddingHorizontal: spacing.lg }, primaryButtonText: { color: colors.surface, fontSize: typography.body, fontWeight: '800' }, profileRow: { alignItems: 'center', flexDirection: 'row' }, avatarFallback: { alignItems: 'center', backgroundColor: colors.primary, justifyContent: 'center' }, avatarInitial: { color: colors.surface, fontSize: 22, fontWeight: '800' }, profileText: { flex: 1, marginLeft: spacing.md }, name: { color: colors.text, fontSize: 17, fontWeight: '800' }, email: { color: colors.textMuted, fontSize: typography.small, marginTop: 2 }, meta: { color: colors.primary, fontSize: typography.small, fontWeight: '600', marginTop: spacing.xs }, outlineButton: { alignItems: 'center', borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, justifyContent: 'center', marginTop: spacing.lg, minHeight: 46 }, outlineText: { color: colors.primary, fontWeight: '700' }, logoutButton: { alignItems: 'center', minHeight: 44, paddingTop: spacing.md }, logoutText: { color: colors.danger, fontWeight: '700' }, editor: { backgroundColor: colors.background, flex: 1, padding: spacing.xl }, editorHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xl }, editorTitle: { color: colors.text, fontSize: typography.title, fontWeight: '800' }, close: { color: colors.primary, fontWeight: '700' }, avatarEditor: { alignItems: 'center', marginBottom: spacing.xl }, changePhoto: { color: colors.primary, fontWeight: '700', marginTop: spacing.sm }, input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, fontSize: typography.body, marginBottom: spacing.md, minHeight: 50, paddingHorizontal: spacing.lg, paddingVertical: spacing.md }, bioInput: { minHeight: 100, textAlignVertical: 'top' },
+  title: { color: colors.text, fontSize: typography.sectionTitle, fontWeight: '700', marginBottom: spacing.md }, paragraph: { color: colors.textMuted, fontSize: typography.body, lineHeight: 22, marginBottom: spacing.md }, primaryButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radius.md, justifyContent: 'center', minHeight: 48, paddingHorizontal: spacing.lg }, primaryButtonText: { color: colors.surface, fontSize: typography.body, fontWeight: '800' }, profileRow: { alignItems: 'center', flexDirection: 'row' }, avatarFallback: { alignItems: 'center', backgroundColor: colors.primary, justifyContent: 'center' }, avatarInitial: { color: colors.surface, fontSize: 22, fontWeight: '800' }, profileText: { flex: 1, marginLeft: spacing.md }, name: { color: colors.text, fontSize: 17, fontWeight: '800' }, email: { color: colors.textMuted, fontSize: typography.small, marginTop: 2 }, meta: { color: colors.primary, fontSize: typography.small, fontWeight: '600', marginTop: spacing.xs }, supportId: { color: colors.placeholder, fontSize: 10, marginTop: spacing.xs }, outlineButton: { alignItems: 'center', borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, justifyContent: 'center', marginTop: spacing.lg, minHeight: 46 }, outlineText: { color: colors.primary, fontWeight: '700' }, logoutButton: { alignItems: 'center', minHeight: 44, paddingTop: spacing.md }, logoutText: { color: colors.danger, fontWeight: '700' }, editor: { backgroundColor: colors.background, flex: 1, padding: spacing.xl }, editorHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xl }, editorTitle: { color: colors.text, fontSize: typography.title, fontWeight: '800' }, close: { color: colors.primary, fontWeight: '700' }, avatarEditor: { alignItems: 'center', marginBottom: spacing.xl }, changePhoto: { color: colors.primary, fontWeight: '700', marginTop: spacing.sm }, input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, fontSize: typography.body, marginBottom: spacing.md, minHeight: 50, paddingHorizontal: spacing.lg, paddingVertical: spacing.md }, bioInput: { minHeight: 100, textAlignVertical: 'top' },
 });

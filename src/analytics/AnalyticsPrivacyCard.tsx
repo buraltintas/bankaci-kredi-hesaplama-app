@@ -13,8 +13,8 @@ export const AnalyticsPrivacyCard = () => {
       <Text style={styles.paragraph}>
         Hesaplayıcıları geliştirmek için kredi türü, tutar, vade ve oran gibi
         hesaplama özetleri hesabınızla ilişkilendirilmeden gönderilir. Ad,
-        e-posta, telefon, profil ve RevenueCat kimliği gönderilmez. İnternet
-        yoksa hesaplama kesintisiz devam eder.
+        e-posta, telefon, profil ve abonelik destek kimliği gönderilmez.
+        İnternet yoksa hesaplama kesintisiz devam eder.
       </Text>
     </View>
   );

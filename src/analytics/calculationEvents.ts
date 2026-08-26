@@ -5,6 +5,7 @@ import type {
 } from '../domain/loan/types';
 import type { TransferComparison } from '../domain/transfer/types';
 import type { CalculationEventInput } from './types';
+import type { CommercialResult } from '../domain/commercial/types';
 
 const LOAN_TYPE_KEYS: Record<string, string> = {
   'Bireysel İhtiyaç/Taşıt Kredisi': 'consumer_vehicle',
@@ -87,3 +88,53 @@ export const buildTransferAnalyticsEvent = ({
     compensationRatePercent: result.compensationRatePercent,
   },
 });
+
+export const buildCommercialAnalyticsEvent = (result: CommercialResult): CalculationEventInput => {
+  let principalAmount: number;
+  let primaryRatePercent: number;
+  let termValue: number;
+  let attributes: Record<string, boolean | number | string> = {};
+  switch (result.productType) {
+    case 'commercial_installment':
+      principalAmount = result.input.principal; primaryRatePercent = result.input.monthlyInterestRatePercent;
+      termValue = result.input.termMonths; attributes = { paymentFrequencyMonths: result.input.paymentFrequencyMonths }; break;
+    case 'commercial_spot':
+      principalAmount = result.input.principal; primaryRatePercent = result.input.annualInterestRatePercent; termValue = result.dayCount; break;
+    case 'commercial_revolving':
+      principalAmount = result.input.principal ?? (() => {
+        let balance = 0;
+        let peakBalance = 0;
+        const dailyNet = new Map<number, number>();
+        for (const movement of result.input.movements ?? []) {
+          const day = new Date(movement.date.getFullYear(), movement.date.getMonth(), movement.date.getDate()).getTime();
+          dailyNet.set(day, (dailyNet.get(day) ?? 0) + movement.amount);
+        }
+        for (const [, amount] of [...dailyNet.entries()].sort(([a], [b]) => a - b)) {
+          balance += amount;
+          peakBalance = Math.max(peakBalance, balance);
+        }
+        return peakBalance;
+      })();
+      primaryRatePercent = result.input.annualInterestRatePercent;
+      termValue = result.totalDays; attributes = { commercialMode: result.input.mode }; break;
+    case 'commercial_discount':
+      principalAmount = result.nominalAmount; primaryRatePercent = result.input.annualDiscountRatePercent;
+      termValue = result.dayCount; attributes = { documentType: result.input.documentType }; break;
+  }
+  return {
+    calculator: 'loan', variant: result.productType,
+    metrics: {
+      principalAmount, primaryRatePercent,
+      termValue,
+      taxRate1Percent: result.input.kkdfRatePercent, taxRate2Percent: result.input.bsmvRatePercent,
+      resultPayment: result.productType === 'commercial_installment' ? result.firstInstallment : 0,
+      resultTotal: result.productType === 'commercial_installment' ? result.totalRepayment
+        : result.productType === 'commercial_spot' ? result.maturityPayment
+          : result.productType === 'commercial_discount' ? result.netProceeds
+            : Math.max(principalAmount, result.closingBalance + result.totalFinancingCost),
+      resultInterest: result.interest,
+      resultNetReturn: result.productType === 'commercial_discount' ? result.netProceeds : undefined,
+    },
+    attributes,
+  };
+};

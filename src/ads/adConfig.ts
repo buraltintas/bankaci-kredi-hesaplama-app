@@ -1,7 +1,11 @@
 import { Platform, type PlatformOSType } from 'react-native';
 import { getHasResolvedPremium, getIsPremium } from '../subscription/premiumStore';
 
-export type InterstitialActionName = 'share' | 'pdf' | 'recommendations';
+export type InterstitialActionName =
+  | 'calculate'
+  | 'share'
+  | 'pdf'
+  | 'recommendations';
 
 type SupportedAdPlatform = Extract<PlatformOSType, 'ios' | 'android'>;
 

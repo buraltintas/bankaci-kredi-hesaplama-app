@@ -729,7 +729,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.md,
     borderWidth: 1,
-    flex: 1,
+    flexBasis: 0,
+    flexGrow: 1,
     flexDirection: 'row',
     gap: spacing.sm,
     justifyContent: 'center',
@@ -742,7 +743,8 @@ const styles = StyleSheet.create({
   },
   pdfButtonWrapper: {
     borderRadius: radius.md,
-    flex: 1,
+    flexBasis: 0,
+    flexGrow: 1,
     overflow: 'hidden',
   },
   pdfButton: {
