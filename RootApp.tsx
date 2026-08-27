@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  LogBox,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import * as Device from 'expo-device';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { DefaultTheme, NavigationContainer, type Theme } from '@react-navigation/native';
@@ -13,6 +22,17 @@ import { navigationRef } from './src/navigation/navigationRef';
 import { AnalyticsProvider } from './src/analytics/AnalyticsProvider';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
+
+// Android emulators without a signed-in Play account cannot expose Google
+// Billing. RevenueCat still resolves support-granted entitlements correctly,
+// so keep these expected development-only store errors out of LogBox while
+// preserving them in logcat for diagnosis.
+if (__DEV__ && Platform.OS === 'android' && !Device.isDevice) {
+  LogBox.ignoreLogs([
+    '[RevenueCat] 🤖‼️ PurchasesError(code=PurchaseNotAllowedError',
+    '[RevenueCat] 🤖‼️ Error fetching offerings - PurchasesError(code=PurchaseNotAllowedError',
+  ]);
+}
 
 const APP_SPLASH_DURATION_MS = 1200;
 const shouldShowAppSplash = Platform.OS === 'android';

@@ -3,14 +3,14 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../design/tokens';
 import CreditScreen from '../screens/CreditScreen';
-import DepositScreen from '../screens/DepositScreen';
 import AnimatedTabBar from './AnimatedTabBar';
 import SettingsScreen from '../screens/SettingsScreen';
 import FeedScreen from '../screens/FeedScreen';
+import RequestsScreen from '../screens/RequestsScreen';
 
 export type RootTabParamList = {
   Loan: undefined;
-  Deposit: undefined;
+  Requests: undefined;
   Feed: undefined;
   Settings: undefined;
 };
@@ -20,7 +20,7 @@ const Tab = createBottomTabNavigator<RootTabParamList>();
 const RootNavigator = () => {
   return (
     <Tab.Navigator
-      tabBar={(props) => <AnimatedTabBar {...props} />}
+      tabBar={(props) => <AnimatedTabBar {...props} premiumRouteNames={['Requests']} />}
       screenOptions={{
         headerShown: false,
         // Keep tab changes directional and avoid Android fade compositing
@@ -34,21 +34,21 @@ const RootNavigator = () => {
         name="Loan"
         component={CreditScreen}
         options={{
-          title: 'Kredi',
-          tabBarAccessibilityLabel: 'Kredi hesaplama',
+          title: 'Hesaplama',
+          tabBarAccessibilityLabel: 'Hesaplama araçları',
           tabBarIcon: ({ color, size }) => (
             <Feather name="percent" size={size} color={color} />
           ),
         }}
       />
       <Tab.Screen
-        name="Deposit"
-        component={DepositScreen}
+        name="Requests"
+        component={RequestsScreen}
         options={{
-          title: 'Mevduat',
-          tabBarAccessibilityLabel: 'Mevduat hesaplama',
+          title: 'Talepler',
+          tabBarAccessibilityLabel: 'Premium talep yönetimi',
           tabBarIcon: ({ color, size }) => (
-            <Feather name="trending-up" size={size} color={color} />
+            <Feather name="inbox" size={size} color={color} />
           ),
         }}
       />
@@ -56,7 +56,7 @@ const RootNavigator = () => {
         name="Feed"
         component={FeedScreen}
         options={{
-          title: 'Akış',
+          title: 'Öğle Arası',
           tabBarAccessibilityLabel: 'Bankacı topluluğu',
           tabBarIcon: ({ color, size }) => (
             <Feather name="users" size={size} color={color} />

@@ -1,5 +1,11 @@
 # Bankacı: Kredi Hesaplama
 
+## Premium talep akışı
+
+`Talepler` sekmesi hem geçerli oturum hem aktif Premium erişimi ister. Her bankacının tek kalıcı linki vardır; yalnızca aktif/pasif yapılır. Kamu formu bankacının güncel profil adını, zorunlu telefonunu ve tercih edilirse e-postasını gösterir. Müşteri notu ile özel belgeleri yalnızca link sahibi bankacı görebilir.
+
+Link kartındaki `Kopyala` ve `Paylaş` aksiyonları kısa `/r/{requestId}` adresini kullanır. Bu adres WhatsApp ve benzeri uygulamalar için bankacının güncel profil adını başlıkta, genel “Kredi talebinizi güvenle iletebilirsiniz” görselini önizlemede sunar ve ardından gerçek forma yönlendirir. Görselde kullanıcı adı yer almadığı için profil adı değişikliklerinde görsel üretmek gerekmez.
+
 Bankacı: Kredi Hesaplama, kredi ödeme planlarını sahada ve müşteri görüşmelerinde hızlıca oluşturmak için geliştirilmiş Expo / React Native uygulamasıdır.
 
 Uygulama standart kredi hesaplamasının yanında bankacılıkta sık kullanılan gelişmiş ödeme planlarını, PDF çıktısını, paylaşım metnini ve son hesaplamalar geçmişini destekler.

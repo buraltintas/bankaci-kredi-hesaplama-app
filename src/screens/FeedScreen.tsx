@@ -17,8 +17,9 @@ import {
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect } from '@react-navigation/native';
 import { APIError, apiRequest } from '../api/client';
 import type { FeedAuthor, FeedComment, FeedPost } from '../api/types';
 import { useAuth } from '../auth/AuthProvider';
@@ -53,20 +54,35 @@ const FeedScreen = () => {
   const { openPaywall } = usePaywall();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [composerVisible, setComposerVisible] = useState(false);
   const [commentsPost, setCommentsPost] = useState<FeedPost | null>(null);
 
   const load = useCallback(async () => {
+    const startedAt = Date.now();
+    setFetching(true);
     try {
       const result = await apiRequest<{ items: FeedPost[] }>('/v1/feed/posts?limit=30', { token: session?.token });
       setPosts(result.items);
     } catch {
       // Keep the last successful feed visible during a temporary outage.
-    } finally { setLoading(false); setRefreshing(false); }
+    } finally {
+      const remainingIndicatorTime = 700 - (Date.now() - startedAt);
+      if (remainingIndicatorTime > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remainingIndicatorTime));
+      }
+      setLoading(false);
+      setRefreshing(false);
+      setFetching(false);
+    }
   }, [session?.token]);
 
-  useEffect(() => { void load(); }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -113,6 +129,83 @@ const FeedScreen = () => {
     catch { void load(); }
   };
 
+  const deletePost = async (post: FeedPost) => {
+    if (!session) return;
+
+    try {
+      await apiRequest(`/v1/feed/posts/${post.id}`, {
+        method: 'DELETE',
+        token: session.token,
+      });
+      setPosts((current) => current.filter((item) => item.id !== post.id));
+    } catch {
+      Alert.alert('Silinemedi', 'Gönderi silinirken bir sorun oluştu. Lütfen tekrar deneyin.');
+    }
+  };
+
+  const confirmDeletePost = (post: FeedPost) => {
+    Alert.alert(
+      'Gönderi silinsin mi?',
+      'Bu işlem geri alınamaz.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        { text: 'Sil', style: 'destructive', onPress: () => void deletePost(post) },
+      ]
+    );
+  };
+
+  const showPostActions = (post: FeedPost) => {
+    if (post.author.id === user?.id) {
+      Alert.alert(
+        'Gönderi seçenekleri',
+        undefined,
+        [
+          { text: 'Vazgeç', style: 'cancel' },
+          {
+            text: 'Gönderiyi sil',
+            style: 'destructive',
+            onPress: () => confirmDeletePost(post),
+          },
+        ]
+      );
+      return;
+    }
+
+    requireMember(() =>
+      Alert.alert(post.author.displayName || 'Bankacı', undefined, [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Gönderiyi bildir',
+          onPress: () =>
+            session &&
+            apiRequest(`/v1/feed/posts/${post.id}/report`, {
+              method: 'POST',
+              token: session.token,
+              body: { reason: 'Uygunsuz içerik' },
+            })
+              .then(() => Alert.alert('Teşekkürler', 'Bildiriminizi aldık.'))
+              .catch(() => undefined),
+        },
+        {
+          text: 'Kullanıcıyı engelle',
+          style: 'destructive',
+          onPress: () =>
+            session &&
+            apiRequest(`/v1/users/${post.author.id}/block`, {
+              method: 'PUT',
+              token: session.token,
+            })
+              .then(() =>
+                setPosts((current) =>
+                  current.filter((item) => item.author.id !== post.author.id)
+                )
+              )
+              .catch(() => undefined),
+        },
+      ])
+    );
+  };
+
   const prependPost = (post: FeedPost) => { setPosts((current) => [post, ...current]); setComposerVisible(false); };
 
   return (
@@ -121,10 +214,11 @@ const FeedScreen = () => {
         data={posts}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.xl }]}
+        stickyHeaderIndices={[0]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} />}
-        ListHeaderComponent={<View style={styles.header}><View><Text style={styles.eyebrow}>Bankacı topluluğu</Text><Text style={styles.pageTitle}>Akış</Text></View><TouchableOpacity accessibilityRole="button" accessibilityLabel="Premium paylaşım oluştur" onPress={openComposer}><LinearGradient colors={[...premium.gradient]} start={premium.gradientStart} end={premium.gradientEnd} style={styles.composeButton}><MaterialCommunityIcons name="crown" color={premium.onGradient} size={16} /><Feather name="edit-3" color={premium.onGradient} size={18} /><Text style={styles.composeText}>Paylaş</Text></LinearGradient></TouchableOpacity></View>}
+        ListHeaderComponent={<View style={styles.stickyHeader}><View style={styles.header}><View><Text style={styles.eyebrow}>Bankacı topluluğu</Text><View style={styles.pageTitleRow}><Text style={styles.pageTitle}>Öğle Arası</Text></View></View><TouchableOpacity accessibilityRole="button" accessibilityLabel="Premium paylaşım oluştur" onPress={openComposer}><LinearGradient colors={[...premium.gradient]} start={premium.gradientStart} end={premium.gradientEnd} style={styles.composeButton}><MaterialCommunityIcons name="crown" color={premium.onGradient} size={16} /><Feather name="edit-3" color={premium.onGradient} size={18} /><Text style={styles.composeText}>Paylaş</Text></LinearGradient></TouchableOpacity></View>{fetching ? <View accessibilityLabel="Paylaşımlar yenileniyor" style={styles.fetchingBanner}><ActivityIndicator color={colors.primary} size="small" /><Text style={styles.fetchingText}>Paylaşımlar yenileniyor…</Text></View> : null}</View>}
         ListEmptyComponent={loading ? <ActivityIndicator color={colors.primary} style={styles.empty} /> : <View style={styles.empty}><Feather name="users" size={34} color={colors.textMuted} /><Text style={styles.emptyTitle}>İlk paylaşımı sen yap</Text><Text style={styles.emptyText}>Bankacılık deneyimlerini, sorularını ve fikirlerini toplulukla paylaş.</Text></View>}
-        renderItem={({ item }) => <View style={styles.postCard}><View style={styles.authorRow}><AuthorAvatar author={item.author} /><View style={styles.authorText}><Text style={styles.authorName}>{item.author.displayName || 'Bankacı'}</Text><Text style={styles.authorMeta}>{[item.author.bankName, item.author.jobTitle].filter(Boolean).join(' · ') || 'Topluluk üyesi'}</Text><Text style={styles.date}>{formatDate(item.createdAt)}</Text></View><TouchableOpacity onPress={() => { if (item.author.id === user?.id) { Alert.alert('Gönderi silinsin mi?', undefined, [{ text: 'Vazgeç', style: 'cancel' }, { text: 'Sil', style: 'destructive', onPress: async () => { if (!session) return; await apiRequest(`/v1/feed/posts/${item.id}`, { method: 'DELETE', token: session.token }); setPosts((current) => current.filter((post) => post.id !== item.id)); } }]); } else { requireMember(() => Alert.alert(item.author.displayName || 'Bankacı', undefined, [{ text: 'Vazgeç', style: 'cancel' }, { text: 'Gönderiyi bildir', onPress: () => session && apiRequest(`/v1/feed/posts/${item.id}/report`, { method: 'POST', token: session.token, body: { reason: 'Uygunsuz içerik' } }).then(() => Alert.alert('Teşekkürler', 'Bildiriminizi aldık.')).catch(() => undefined) }, { text: 'Kullanıcıyı engelle', style: 'destructive', onPress: () => session && apiRequest(`/v1/users/${item.author.id}/block`, { method: 'PUT', token: session.token }).then(() => setPosts((current) => current.filter((post) => post.author.id !== item.author.id))).catch(() => undefined) }])); } }}><Feather name="more-horizontal" color={colors.textMuted} size={20} /></TouchableOpacity></View><Text style={styles.body}>{item.body}</Text>{item.imageUrl ? <Image source={{ uri: item.imageUrl }} resizeMode="cover" style={styles.postImage} /> : null}<View style={styles.actions}><TouchableOpacity onPress={() => void toggleLike(item)} style={styles.action}><Feather name="heart" color={item.likedByMe ? colors.danger : colors.textMuted} size={19} /><Text style={[styles.actionText, item.likedByMe && { color: colors.danger }]}>{item.likeCount}</Text></TouchableOpacity><TouchableOpacity onPress={() => setCommentsPost(item)} style={styles.action}><Feather name="message-circle" color={colors.textMuted} size={19} /><Text style={styles.actionText}>{item.commentCount}</Text></TouchableOpacity></View></View>}
+        renderItem={({ item }) => <View style={styles.postCard}><View style={styles.authorRow}><AuthorAvatar author={item.author} /><View style={styles.authorText}><Text style={styles.authorName}>{item.author.displayName || 'Bankacı'}</Text><Text style={styles.authorMeta}>{[item.author.bankName, item.author.jobTitle].filter(Boolean).join(' · ') || 'Topluluk üyesi'}</Text><Text style={styles.date}>{formatDate(item.createdAt)}</Text></View><TouchableOpacity accessibilityRole="button" accessibilityLabel="Gönderi seçenekleri" hitSlop={12} onPress={() => showPostActions(item)}><Feather name="more-horizontal" color={colors.textMuted} size={20} /></TouchableOpacity></View><Text style={styles.body}>{item.body}</Text>{item.imageUrl ? <Image source={{ uri: item.imageUrl }} resizeMode="cover" style={styles.postImage} /> : null}<View style={styles.actions}><TouchableOpacity onPress={() => void toggleLike(item)} style={styles.action}><Feather name="heart" color={item.likedByMe ? colors.danger : colors.textMuted} size={19} /><Text style={[styles.actionText, item.likedByMe && { color: colors.danger }]}>{item.likeCount}</Text></TouchableOpacity><TouchableOpacity onPress={() => setCommentsPost(item)} style={styles.action}><Feather name="message-circle" color={colors.textMuted} size={19} /><Text style={styles.actionText}>{item.commentCount}</Text></TouchableOpacity></View></View>}
       />
       <ComposerModal visible={composerVisible} token={session?.token ?? null} onClose={() => setComposerVisible(false)} onCreated={prependPost} />
       <CommentsModal post={commentsPost} token={session?.token ?? null} onLogin={openLogin} onClose={() => setCommentsPost(null)} onCommentAdded={() => setPosts((current) => current.map((post) => post.id === commentsPost?.id ? { ...post, commentCount: post.commentCount + 1 } : post))} />
@@ -140,14 +234,47 @@ const ComposerModal = ({ visible, token, onClose, onCreated }: { visible: boolea
 };
 
 const CommentsModal = ({ post, token, onLogin, onClose, onCommentAdded }: { post: FeedPost | null; token: string | null; onLogin: () => void; onClose: () => void; onCommentAdded: () => void }) => {
+  const insets = useSafeAreaInsets();
   const [comments, setComments] = useState<FeedComment[]>([]); const [body, setBody] = useState('');
   useEffect(() => { if (post) void apiRequest<{ items: FeedComment[] }>(`/v1/feed/posts/${post.id}/comments`).then((response) => setComments(response.items)).catch(() => setComments([])); }, [post]);
   const send = async () => { if (!token) { onLogin(); return; } if (!post || !body.trim()) return; try { const comment = await apiRequest<FeedComment>(`/v1/feed/posts/${post.id}/comments`, { method: 'POST', token, body: { body } }); setComments((current) => [...current, comment]); setBody(''); onCommentAdded(); } catch { Alert.alert('Yorum gönderilemedi'); } };
-  return <Modal visible={post !== null} animationType="slide" presentationStyle="pageSheet"><SafeAreaView style={styles.commentsRoot}><View style={styles.modalHeader}><Text style={styles.modalTitle}>Yorumlar</Text><TouchableOpacity onPress={onClose}><Text style={styles.close}>Kapat</Text></TouchableOpacity></View><FlatList data={comments} keyExtractor={(item) => item.id} contentContainerStyle={styles.commentsList} ListEmptyComponent={<Text style={styles.emptyText}>Henüz yorum yok.</Text>} renderItem={({ item }) => <View style={styles.comment}><AuthorAvatar author={item.author} size={34} /><View style={styles.commentBubble}><Text style={styles.commentAuthor}>{item.author.displayName || 'Bankacı'}</Text><Text style={styles.commentBody}>{item.body}</Text></View></View>} /><KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}><View style={styles.commentComposer}><TextInput placeholder={token ? 'Yorum yaz…' : 'Yorum için giriş yapın'} placeholderTextColor={colors.placeholder} style={styles.commentInput} value={body} onChangeText={setBody} onFocus={() => { if (!token) onLogin(); }} /><TouchableOpacity onPress={() => void send()}><Feather name="send" size={22} color={colors.primary} /></TouchableOpacity></View></KeyboardAvoidingView></SafeAreaView></Modal>;
+  return (
+    <Modal visible={post !== null} animationType="slide" presentationStyle="pageSheet">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.commentsKeyboardArea}>
+        <SafeAreaView edges={['top', 'left', 'right']} style={styles.commentsRoot}>
+          <View style={styles.commentsHeader}><Text style={styles.modalTitle}>Yorumlar</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Yorumları kapat" hitSlop={10} onPress={onClose}><Text style={styles.close}>Kapat</Text></TouchableOpacity></View>
+          <FlatList data={comments} keyExtractor={(item) => item.id} contentContainerStyle={styles.commentsList} keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled" style={styles.commentsListView} ListEmptyComponent={<View style={styles.commentsEmpty}><Feather name="message-circle" size={30} color={colors.textMuted} /><Text style={styles.emptyText}>Henüz yorum yok.</Text></View>} renderItem={({ item }) => <View style={styles.comment}><AuthorAvatar author={item.author} size={36} /><View style={styles.commentBubble}><Text style={styles.commentAuthor}>{item.author.displayName || 'Bankacı'}</Text><Text style={styles.commentBody}>{item.body}</Text></View></View>} />
+          <View style={[styles.commentComposerArea, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+            <View style={styles.commentComposer}>
+              <TextInput placeholder={token ? 'Yorum yaz…' : 'Yorum için giriş yapın'} placeholderTextColor={colors.placeholder} returnKeyType="send" style={styles.commentInput} value={body} onChangeText={setBody} onFocus={() => { if (!token) onLogin(); }} onSubmitEditing={() => void send()} />
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Yorumu gönder" disabled={!body.trim()} hitSlop={8} onPress={() => void send()} style={[styles.commentSend, body.trim() ? styles.commentSendActive : styles.commentSendDisabled]}><Feather name="send" size={19} color={colors.surface} /></TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
 };
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 }, content: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg }, header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.lg, paddingTop: spacing.md }, eyebrow: { color: colors.primary, fontSize: typography.small, fontWeight: '800', textTransform: 'uppercase' }, pageTitle: { color: colors.text, fontSize: typography.title, fontWeight: '800' }, composeButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radius.md, flexDirection: 'row', gap: spacing.sm, minHeight: 42, paddingHorizontal: spacing.md }, composeText: { color: colors.surface, fontWeight: '800' }, postCard: { backgroundColor: colors.surface, borderRadius: radius.lg, marginBottom: spacing.md, padding: spacing.lg, ...shadows.card }, authorRow: { alignItems: 'center', flexDirection: 'row' }, avatar: { alignItems: 'center', backgroundColor: colors.primary, justifyContent: 'center' }, avatarText: { color: colors.surface, fontWeight: '800' }, authorText: { flex: 1, marginLeft: spacing.md }, authorName: { color: colors.text, fontSize: typography.body, fontWeight: '800' }, authorMeta: { color: colors.textMuted, fontSize: typography.small, marginTop: 1 }, date: { color: colors.placeholder, fontSize: 11, marginTop: 2 }, body: { color: colors.text, fontSize: typography.body, lineHeight: 22, marginTop: spacing.md }, postImage: { aspectRatio: 1.5, borderRadius: radius.md, marginTop: spacing.md, width: '100%' }, actions: { alignItems: 'center', borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', marginTop: spacing.md, paddingTop: spacing.md }, action: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs, minHeight: 34, paddingRight: spacing.xl }, actionText: { color: colors.textMuted, fontWeight: '700' }, reportAction: { marginLeft: 'auto', paddingRight: 0 }, empty: { alignItems: 'center', padding: spacing.xxl }, emptyTitle: { color: colors.text, fontSize: typography.sectionTitle, fontWeight: '800', marginTop: spacing.md }, emptyText: { color: colors.textMuted, lineHeight: 21, marginTop: spacing.sm, textAlign: 'center' }, modal: { backgroundColor: colors.background, flex: 1, padding: spacing.xl }, modalHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: spacing.lg }, modalTitle: { color: colors.text, fontSize: 24, fontWeight: '800' }, close: { color: colors.primary, fontWeight: '700', padding: spacing.sm }, composerInput: { backgroundColor: colors.surface, borderRadius: radius.lg, color: colors.text, fontSize: 17, minHeight: 180, padding: spacing.lg, textAlignVertical: 'top' }, preview: { aspectRatio: 1.8, borderRadius: radius.md, marginTop: spacing.md, width: '100%' }, composerFooter: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg }, photoButton: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minHeight: 44 }, photoText: { color: colors.primary, fontWeight: '700' }, publishButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radius.md, justifyContent: 'center', minHeight: 46, minWidth: 110 }, publishText: { color: colors.surface, fontWeight: '800' }, commentsRoot: { backgroundColor: colors.background, flex: 1, paddingHorizontal: spacing.lg }, commentsList: { paddingVertical: spacing.md }, comment: { alignItems: 'flex-start', flexDirection: 'row', marginBottom: spacing.md }, commentBubble: { backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, flex: 1, marginLeft: spacing.sm, padding: spacing.md }, commentAuthor: { color: colors.text, fontWeight: '800' }, commentBody: { color: colors.text, lineHeight: 20, marginTop: spacing.xs }, commentComposer: { alignItems: 'center', backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: 1, flexDirection: 'row', gap: spacing.md, padding: spacing.md }, commentInput: { color: colors.text, flex: 1, minHeight: 44 },
+  safeArea: { backgroundColor: colors.background, flex: 1 }, content: { paddingHorizontal: spacing.lg }, stickyHeader: { backgroundColor: colors.background, marginHorizontal: -spacing.lg, paddingBottom: spacing.lg, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, zIndex: 2 }, header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }, eyebrow: { color: colors.primary, fontSize: typography.small, fontWeight: '800', textTransform: 'uppercase' }, pageTitleRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm }, pageTitle: { color: colors.text, fontSize: typography.title, fontWeight: '800' }, composeButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radius.md, flexDirection: 'row', gap: spacing.sm, minHeight: 42, paddingHorizontal: spacing.md }, composeText: { color: colors.surface, fontWeight: '800' }, postCard: { backgroundColor: colors.surface, borderRadius: radius.lg, marginBottom: spacing.md, padding: spacing.lg, ...shadows.card }, authorRow: { alignItems: 'center', flexDirection: 'row' }, avatar: { alignItems: 'center', backgroundColor: colors.primary, justifyContent: 'center' }, avatarText: { color: colors.surface, fontWeight: '800' }, authorText: { flex: 1, marginLeft: spacing.md }, authorName: { color: colors.text, fontSize: typography.body, fontWeight: '800' }, authorMeta: { color: colors.textMuted, fontSize: typography.small, marginTop: 1 }, date: { color: colors.placeholder, fontSize: 11, marginTop: 2 }, body: { color: colors.text, fontSize: typography.body, lineHeight: 22, marginTop: spacing.md }, postImage: { aspectRatio: 1.5, borderRadius: radius.md, marginTop: spacing.md, width: '100%' }, actions: { alignItems: 'center', borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', marginTop: spacing.md, paddingTop: spacing.md }, action: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs, minHeight: 34, paddingRight: spacing.xl }, actionText: { color: colors.textMuted, fontWeight: '700' }, reportAction: { marginLeft: 'auto', paddingRight: 0 }, empty: { alignItems: 'center', padding: spacing.xxl }, emptyTitle: { color: colors.text, fontSize: typography.sectionTitle, fontWeight: '800', marginTop: spacing.md }, emptyText: { color: colors.textMuted, lineHeight: 21, marginTop: spacing.sm, textAlign: 'center' }, modal: { backgroundColor: colors.background, flex: 1, padding: spacing.xl }, modalHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: spacing.lg }, modalTitle: { color: colors.text, fontSize: 24, fontWeight: '800' }, close: { color: colors.primary, fontWeight: '700', padding: spacing.sm }, composerInput: { backgroundColor: colors.surface, borderRadius: radius.lg, color: colors.text, fontSize: 17, minHeight: 180, padding: spacing.lg, textAlignVertical: 'top' }, preview: { aspectRatio: 1.8, borderRadius: radius.md, marginTop: spacing.md, width: '100%' }, composerFooter: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg }, photoButton: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minHeight: 44 }, photoText: { color: colors.primary, fontWeight: '700' }, publishButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radius.md, justifyContent: 'center', minHeight: 46, minWidth: 110 }, publishText: { color: colors.surface, fontWeight: '800' }, commentsKeyboardArea: { backgroundColor: colors.background, flex: 1 }, commentsRoot: { backgroundColor: colors.background, flex: 1, paddingHorizontal: spacing.lg }, commentsHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: spacing.md, paddingTop: spacing.md }, commentsListView: { flex: 1 }, commentsList: { paddingBottom: spacing.lg, paddingTop: spacing.sm }, commentsEmpty: { alignItems: 'center', justifyContent: 'center', paddingTop: spacing.xxl }, comment: { alignItems: 'flex-start', flexDirection: 'row', marginBottom: spacing.md }, commentBubble: { backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, flex: 1, marginLeft: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, commentAuthor: { color: colors.text, fontWeight: '800' }, commentBody: { color: colors.text, lineHeight: 20, marginTop: spacing.xs }, commentComposerArea: { backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, flexShrink: 0, marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg, paddingTop: spacing.md }, commentComposer: { alignItems: 'center', backgroundColor: colors.surfaceMuted, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, height: 52, paddingLeft: spacing.md, paddingRight: 6 }, commentInput: { color: colors.text, flex: 1, fontSize: typography.body, height: 50, paddingVertical: 0 }, commentSend: { alignItems: 'center', borderRadius: 19, height: 38, justifyContent: 'center', width: 38 }, commentSendActive: { backgroundColor: colors.primary }, commentSendDisabled: { backgroundColor: colors.primary, opacity: 0.35 },
+  fetchingBanner: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    minHeight: 38,
+    paddingHorizontal: spacing.md,
+  },
+  fetchingText: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    fontWeight: '700',
+  },
 });
 
 export default FeedScreen;

@@ -40,3 +40,40 @@ export type FeedComment = {
   createdAt: string;
   author: FeedAuthor;
 };
+
+export type LoanRequestLink = {
+  id: string;
+  requestId: string;
+  label: string;
+  bankerPhone: string;
+  showEmail: boolean;
+  defaultLoanType: 'consumer' | 'vehicle' | 'housing' | 'commercial' | null;
+  isActive: boolean;
+  expiresAt?: string | null;
+  viewCount: number;
+  submissionCount: number;
+  lastViewedAt: string | null;
+  createdAt: string;
+};
+
+export type LoanRequest = {
+  id: string;
+  linkId: string;
+  fullName: string;
+  phone: string;
+  email: string | null;
+  loanType: 'consumer' | 'vehicle' | 'housing' | 'commercial';
+  amount: string;
+  termMonths: number;
+  notes: string;
+  documentUrls: string[];
+  status: 'new' | 'contacted' | 'closed';
+  createdAt: string;
+};
+
+export type BankerNote = {
+  id: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+};

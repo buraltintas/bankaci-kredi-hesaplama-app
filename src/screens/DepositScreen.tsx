@@ -44,7 +44,7 @@ const formatRate = (value: number): string => {
   return `%${value.toString().replace('.', ',')}`;
 };
 
-const DepositScreen = () => {
+const DepositScreen = ({ topContent }: { topContent?: React.ReactNode }) => {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -229,11 +229,13 @@ const DepositScreen = () => {
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={topContent ? [1] : undefined}
         >
           <View style={styles.header}>
             <Text style={styles.eyebrow}>Bankacı</Text>
             <Text style={styles.title}>Mevduat Hesaplama</Text>
           </View>
+          {topContent}
 
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Mevduat Bilgileri</Text>

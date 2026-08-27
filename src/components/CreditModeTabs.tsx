@@ -12,7 +12,7 @@ import { colors, premium, spacing } from '../design/tokens';
 
 const INDICATOR_WIDTH = 28;
 
-export type CreditMode = 'individual' | 'commercial' | 'transfer';
+export type CreditMode = 'individual' | 'commercial' | 'transfer' | 'deposit';
 
 type Props = {
   value: CreditMode;
@@ -25,12 +25,14 @@ const MODE_INDEX: Record<CreditMode, number> = {
   individual: 0,
   commercial: 1,
   transfer: 2,
+  deposit: 3,
 };
 
 const TABS = [
   ['individual', 'Bireysel'],
   ['commercial', 'Ticari'],
   ['transfer', 'Konut Devir'],
+  ['deposit', 'Mevduat'],
 ] as const;
 
 export default function CreditModeTabs({
@@ -78,7 +80,7 @@ export default function CreditModeTabs({
               transform: [
                 {
                   translateX: animatedProgress.interpolate({
-                    inputRange: [0, 1, 2],
+                    inputRange: [0, 1, 2, 3],
                     outputRange: [
                       spacing.lg + (tabWidth - INDICATOR_WIDTH) / 2,
                       spacing.lg +
@@ -86,6 +88,9 @@ export default function CreditModeTabs({
                         (tabWidth - INDICATOR_WIDTH) / 2,
                       spacing.lg +
                         tabWidth * 2 +
+                        (tabWidth - INDICATOR_WIDTH) / 2,
+                      spacing.lg +
+                        tabWidth * 3 +
                         (tabWidth - INDICATOR_WIDTH) / 2,
                     ],
                   }),
@@ -98,7 +103,7 @@ export default function CreditModeTabs({
       {TABS.map(([key, label], index) => {
           const selected = value === key;
           const color = animatedProgress.interpolate({
-            inputRange: [0, 1, 2],
+            inputRange: [0, 1, 2, 3],
             outputRange: TABS.map((_, tabIndex) =>
               index === tabIndex ? colors.primary : colors.textMuted
             ),
@@ -141,7 +146,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     marginHorizontal: -spacing.lg,
-    marginBottom: spacing.lg,
     paddingHorizontal: spacing.lg,
     position: 'relative',
     shadowColor: '#0B1F33',
@@ -174,5 +178,5 @@ const styles = StyleSheet.create({
     gap: 3,
     justifyContent: 'center',
   },
-  text: { fontSize: 15, fontWeight: '800' },
+  text: { fontSize: 13, fontWeight: '800' },
 });

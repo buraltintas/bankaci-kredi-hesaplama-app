@@ -370,25 +370,58 @@ const LoginModal = ({
             onChangeText={setEmail}
           />
         ) : (
-          <TextInput
-            autoComplete="one-time-code"
-            autoFocus
-            importantForAutofill="yes"
-            keyboardType="number-pad"
-            maxLength={6}
-            onBlur={() => setIsInputFocused(false)}
-            onFocus={() => setIsInputFocused(true)}
-            placeholder="000000"
-            placeholderTextColor={colors.placeholder}
+          <View
             style={[
               styles.input,
-              styles.codeInput,
+              styles.codeInputContainer,
               isInputFocused && styles.inputFocused,
             ]}
-            textContentType="oneTimeCode"
-            value={code}
-            onChangeText={(value) => setCode(value.replace(/\D/g, ''))}
-          />
+          >
+            <View pointerEvents="none" style={styles.codeDigits}>
+              {Array.from({ length: 6 }, (_, index) => {
+                const digit = code[index];
+                const isCursorBeforeDigit =
+                  isInputFocused && code.length < 6 && code.length === index;
+                const isCursorAfterDigit =
+                  isInputFocused && code.length === 6 && index === 5;
+
+                return (
+                  <View key={index} style={styles.codeDigitSlot}>
+                    {isCursorBeforeDigit ? (
+                      <View style={styles.codeCursor} />
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.codeDigit,
+                        !digit && styles.codeDigitPlaceholder,
+                      ]}
+                    >
+                      {digit ?? '0'}
+                    </Text>
+                    {isCursorAfterDigit ? (
+                      <View style={styles.codeCursor} />
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+            <TextInput
+              accessibilityLabel="6 haneli giriş kodu"
+              autoComplete="one-time-code"
+              autoFocus
+              caretHidden
+              importantForAutofill="yes"
+              keyboardType="number-pad"
+              maxLength={6}
+              onBlur={() => setIsInputFocused(false)}
+              onFocus={() => setIsInputFocused(true)}
+              selectionColor="transparent"
+              style={styles.codeInputCapture}
+              textContentType="oneTimeCode"
+              value={code}
+              onChangeText={(value) => setCode(value.replace(/\D/g, ''))}
+            />
+          </View>
         )}
 
         <View style={styles.securityNote}>
@@ -563,12 +596,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   inputFocused: { borderColor: colors.primary, borderWidth: 2 },
-  codeInput: {
+  codeInputContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  codeInputCapture: {
+    ...StyleSheet.absoluteFillObject,
+    color: 'transparent',
+  },
+  codeDigits: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  codeDigitSlot: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    minWidth: 35,
+    position: 'relative',
+  },
+  codeCursor: {
+    backgroundColor: colors.primary,
+    borderRadius: 1,
+    height: 32,
+    marginRight: 2,
+    width: 2,
+  },
+  codeDigit: {
+    color: colors.text,
     fontSize: 28,
     fontWeight: '800',
-    letterSpacing: 10,
     textAlign: 'center',
   },
+  codeDigitPlaceholder: { color: colors.placeholder },
   securityNote: {
     alignItems: 'center',
     flexDirection: 'row',

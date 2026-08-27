@@ -632,18 +632,20 @@ const LoanCalculator = ({ topContent = null, contentOpacity = 1 }) => {
       const loanInput = buildLoanInput();
       const nextResult = calculateLoan(loanInput);
 
-      setResult(nextResult);
-      setFormError('');
+      await runActionWithOptionalInterstitial('calculate', () => {
+        setResult(nextResult);
+        setFormError('');
 
-      void trackCalculation(
-        buildLoanAnalyticsEvent({ loanType, input: loanInput, result: nextResult })
-      ).catch(() => undefined);
+        void trackCalculation(
+          buildLoanAnalyticsEvent({ loanType, input: loanInput, result: nextResult })
+        ).catch(() => undefined);
 
-      addRecentCalculation(formSnapshot, nextResult, recentCalculations)
-        .then(setRecentCalculations)
-        .catch(() => undefined);
+        addRecentCalculation(formSnapshot, nextResult, recentCalculations)
+          .then(setRecentCalculations)
+          .catch(() => undefined);
 
-      scrollToResult();
+        scrollToResult();
+      });
     } catch (error) {
       const message =
         error instanceof Error

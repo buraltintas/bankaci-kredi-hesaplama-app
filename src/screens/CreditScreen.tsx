@@ -7,11 +7,13 @@ import { usePremium } from '../subscription/PremiumProvider';
 import { canUseTransfer } from '../subscription/premiumFeatures';
 import CommercialCalculatorScreen from './CommercialCalculatorScreen';
 import TransferScreen from './TransferScreen';
+import DepositScreen from './DepositScreen';
 
 const MODE_INDEX: Record<CreditMode, number> = {
   individual: 0,
   commercial: 1,
   transfer: 2,
+  deposit: 3,
 };
 
 export default function CreditScreen() {
@@ -22,6 +24,7 @@ export default function CreditScreen() {
     individual: true,
     commercial: false,
     transfer: false,
+    deposit: false,
   });
   const requestedMode = useRef<CreditMode>('individual');
   const tabProgress = useRef(new Animated.Value(0)).current;
@@ -121,6 +124,16 @@ export default function CreditScreen() {
           style={[styles.screen, mode !== 'transfer' && styles.hiddenScreen]}
         >
           <TransferScreen topContent={tabs} contentOpacity={contentOpacity} />
+        </View>
+      ) : null}
+      {mountedModes.deposit ? (
+        <View
+          accessibilityElementsHidden={mode !== 'deposit'}
+          importantForAccessibility={mode === 'deposit' ? 'auto' : 'no-hide-descendants'}
+          pointerEvents={mode === 'deposit' ? 'auto' : 'none'}
+          style={[styles.screen, mode !== 'deposit' && styles.hiddenScreen]}
+        >
+          <DepositScreen topContent={tabs} />
         </View>
       ) : null}
     </Animated.View>

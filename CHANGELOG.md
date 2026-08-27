@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — Talep yönetimi ve hesaplama menüsü
+
+- Alt menü `Hesaplama`, `Talepler`, `Öğle Arası`, `Ayarlar` olarak sadeleştirildi.
+- Mevduat, Bireysel/Ticari/Konut Devir ile aynı hesaplama sekmesine taşındı.
+- Giriş yapmış Premium kullanıcılar için tek kalıcı talep linki, gelen talep akordeonları, güvenli belgeler, arama/WhatsApp, kişisel notlar ve paylaşılabilir görseller eklendi.
+- Talep linkine ayrı kopyalama aksiyonu ve WhatsApp uyumlu kısa paylaşım adresi eklendi; bağlantı önizlemesinin başlığı güncel profil adını, görseli genel güvenli talep mesajını kullanıyor.
+- PNG paylaşım görseli üreticisine düzenlenebilir özel metin, isteğe bağlı isim ve telefon, beş renk paleti ve üç farklı tasarım şablonu eklendi; görsel içindeki “Bankacı” ibaresi kaldırıldı.
+- Talepler / Notlar / Görsel sekmeleri hesaplama ekranıyla aynı yarı saydam yüzey, kayan kısa alt çizgi, renk geçişi ve scroll sırasında sticky davranışına geçirildi.
+- Hesaplama ve Talepler sticky tablarının altındaki bileşen marjı ile ekran boşluğunun üst üste binmesi kaldırıldı; içerik aralığı tek standart boşluğa indirildi.
+- Yorum yazma alanı tüm modalı saran klavye kaçınması, cihaz safe-area ölçüsü,
+  ayrı alt panel ve dengeli input/gönder butonu yerleşimiyle yeniden kuruldu.
+
 Önemli kullanıcı ve operasyon değişiklikleri bu dosyada tutulur.
 
 ## [Unreleased]
