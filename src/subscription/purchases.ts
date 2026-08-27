@@ -5,7 +5,7 @@ import type {
   PurchasesPackage,
 } from 'react-native-purchases';
 import { getRevenueCatApiKey, PREMIUM_ENTITLEMENT_ID } from './subscriptionConfig';
-import { setIsPremium } from './premiumStore';
+import { getIsPremium, setIsPremium } from './premiumStore';
 import { hydratePremiumFromCache, startPersistingPremium } from './premiumCache';
 
 type PurchasesModule = typeof import('react-native-purchases').default;
@@ -62,6 +62,35 @@ export const refreshPremiumStatus = async (
   }
 };
 
+let anonymousRestoreAttempted = false;
+
+/**
+ * A fresh install has a new anonymous RevenueCat identity, so a subscription
+ * bought earlier (and never linked to an account) is not yet visible. Syncing
+ * the store transactions posts the receipt and restores the entitlement
+ * silently — no login and no App Store password prompt, unlike restore.
+ *
+ * Skipped once premium is already known, and for identified (logged-in) users,
+ * whose entitlement comes from their account rather than this device.
+ */
+const restoreAnonymousEntitlementOnce = async (
+  Purchases: PurchasesModule
+): Promise<void> => {
+  if (anonymousRestoreAttempted || getIsPremium()) {
+    return;
+  }
+  anonymousRestoreAttempted = true;
+  try {
+    if (!(await Purchases.isAnonymous())) {
+      return;
+    }
+    const { customerInfo } = await Purchases.syncPurchasesForResult();
+    setIsPremium(hasPremiumEntitlement(customerInfo));
+  } catch {
+    // The manual "Satın alımları geri yükle" control remains as a fallback.
+  }
+};
+
 /**
  * Configures RevenueCat and starts tracking the premium entitlement.
  * Safe to call more than once; only the first call configures the SDK.
@@ -93,6 +122,7 @@ export const initializePurchases = async (
         });
 
         await refreshPremiumStatus();
+        await restoreAnonymousEntitlementOnce(Purchases);
       } catch {
         // Offline or misconfigured — the cached entitlement stays in effect.
       }
@@ -208,6 +238,11 @@ export const resetRevenueCatToGuest = async (): Promise<void> => {
     if (!(await Purchases.isAnonymous())) {
       const customerInfo = await Purchases.logOut();
       setIsPremium(hasPremiumEntitlement(customerInfo));
+      // logOut lands on a fresh anonymous identity. If this device's store
+      // account still owns the subscription, restore it so signing out never
+      // strips premium the person still paid for.
+      anonymousRestoreAttempted = false;
+      await restoreAnonymousEntitlementOnce(Purchases);
     }
   } catch {
     // Logout from the Bankacı API still succeeds; RevenueCat will be
@@ -291,4 +326,5 @@ export const __resetPurchasesForTests = (): void => {
   configured = false;
   initializationPromise = null;
   persistenceStarted = false;
+  anonymousRestoreAttempted = false;
 };

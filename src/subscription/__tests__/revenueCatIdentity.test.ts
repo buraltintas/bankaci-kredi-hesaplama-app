@@ -2,7 +2,9 @@ import type { CustomerInfo } from 'react-native-purchases';
 import {
   __resetPurchasesForTests,
   identifyRevenueCatUser,
+  initializePurchases,
   refreshPremiumStatus,
+  resetRevenueCatToGuest,
 } from '../purchases';
 import { __resetPremiumStoreForTests, getIsPremium } from '../premiumStore';
 
@@ -17,6 +19,7 @@ const mockPurchases = {
   isAnonymous: jest.fn(),
   invalidateCustomerInfoCache: jest.fn(),
   logIn: jest.fn(),
+  logOut: jest.fn(),
   setEmail: jest.fn(),
   syncPurchasesForResult: jest.fn(),
 };
@@ -105,5 +108,60 @@ describe('RevenueCat member identity migration', () => {
 
     expect(mockPurchases.invalidateCustomerInfoCache).toHaveBeenCalledTimes(1);
     expect(mockPurchases.getCustomerInfo).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('anonymous store-entitlement restore', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    __resetPurchasesForTests();
+    __resetPremiumStoreForTests();
+    mockPurchases.getAppUserID.mockResolvedValue('$RCAnonymousID:fresh');
+    mockPurchases.isAnonymous.mockResolvedValue(true);
+  });
+
+  it('restores a store purchase on a fresh anonymous install without a prompt', async () => {
+    // getCustomerInfo is empty on a new install; the receipt still owns premium.
+    mockPurchases.getCustomerInfo.mockResolvedValue(freeInfo);
+    mockPurchases.syncPurchasesForResult.mockResolvedValue({ customerInfo: activeInfo });
+
+    await initializePurchases();
+
+    expect(mockPurchases.syncPurchasesForResult).toHaveBeenCalledTimes(1);
+    expect(getIsPremium()).toBe(true);
+  });
+
+  it('does not sync when the entitlement is already known', async () => {
+    mockPurchases.getCustomerInfo.mockResolvedValue(activeInfo);
+
+    await initializePurchases();
+
+    expect(mockPurchases.syncPurchasesForResult).not.toHaveBeenCalled();
+    expect(getIsPremium()).toBe(true);
+  });
+
+  it('does not sync for an identified (logged-in) startup', async () => {
+    mockPurchases.getCustomerInfo.mockResolvedValue(freeInfo);
+    mockPurchases.isAnonymous.mockResolvedValue(false);
+
+    await initializePurchases('rc_verified_user');
+
+    expect(mockPurchases.syncPurchasesForResult).not.toHaveBeenCalled();
+  });
+
+  it('keeps store premium after logout by restoring the guest identity', async () => {
+    // A premium member signs out; logOut lands on a fresh anonymous id whose
+    // customerInfo is empty, but the device's store account still owns it.
+    mockPurchases.isAnonymous
+      .mockResolvedValueOnce(false) // still identified when logout begins
+      .mockResolvedValue(true); // anonymous afterwards
+    mockPurchases.logOut.mockResolvedValue(freeInfo);
+    mockPurchases.syncPurchasesForResult.mockResolvedValue({ customerInfo: activeInfo });
+
+    await resetRevenueCatToGuest();
+
+    expect(mockPurchases.logOut).toHaveBeenCalledTimes(1);
+    expect(mockPurchases.syncPurchasesForResult).toHaveBeenCalledTimes(1);
+    expect(getIsPremium()).toBe(true);
   });
 });
