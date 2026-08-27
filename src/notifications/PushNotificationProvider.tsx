@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
@@ -13,9 +14,16 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import NetInfo from '@react-native-community/netinfo';
 import { apiRequest } from '../api/client';
+import type {
+  NotificationCategory,
+  NotificationPreferences,
+} from '../api/types';
 import { useAuth } from '../auth/AuthProvider';
 import { navigationRef } from '../navigation/navigationRef';
-import { setStoredExpoPushToken } from './pushTokenStorage';
+import {
+  getStoredExpoPushToken,
+  setStoredExpoPushToken,
+} from './pushTokenStorage';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -26,16 +34,34 @@ Notifications.setNotificationHandler({
   }),
 });
 
-export type PushStatus = 'checking' | 'disabled' | 'denied' | 'enabled' | 'unavailable';
+export type PushStatus =
+  | 'checking'
+  | 'disabled'
+  | 'denied'
+  | 'enabled'
+  | 'unavailable';
+
+const DEFAULT_PREFERENCES: NotificationPreferences = {
+  requests: true,
+  feed: true,
+  announcements: true,
+};
 
 type PushContextValue = {
   status: PushStatus;
   enableNotifications: () => Promise<boolean>;
+  preferences: NotificationPreferences;
+  setPreference: (
+    category: NotificationCategory,
+    enabled: boolean
+  ) => Promise<void>;
 };
 
 const PushContext = createContext<PushContextValue>({
   status: 'checking',
   enableNotifications: async () => false,
+  preferences: DEFAULT_PREFERENCES,
+  setPreference: async () => undefined,
 });
 
 const projectId =
@@ -47,9 +73,18 @@ const permissionAllowsNotifications = (
   permission.granted ||
   permission.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
 
+// Every feed-related notification opens the community tab. Personal request and
+// admin announcements deliberately carry no target, so tapping just opens the
+// app on the last screen.
+const FEED_NOTIFICATION_TYPES = new Set([
+  'feed_comment',
+  'feed_like',
+  'feed_digest',
+]);
+
 const openNotification = (response: Notifications.NotificationResponse) => {
-  const data = response.notification.request.content.data;
-  if (data?.type !== 'feed_comment') return;
+  const type = response.notification.request.content.data?.type;
+  if (typeof type !== 'string' || !FEED_NOTIFICATION_TYPES.has(type)) return;
   const navigate = () => {
     if (navigationRef.isReady()) navigationRef.navigate('Feed');
   };
@@ -60,13 +95,30 @@ const openNotification = (response: Notifications.NotificationResponse) => {
 export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
   const { session } = useAuth();
   const [status, setStatus] = useState<PushStatus>('checking');
+  const [preferences, setPreferences] =
+    useState<NotificationPreferences>(DEFAULT_PREFERENCES);
+  const deviceTokenRef = useRef<string | null>(null);
 
-  const ensureAndroidChannel = useCallback(async () => {
+  const ensureAndroidChannels = useCallback(async () => {
     if (Platform.OS !== 'android') return;
+    // Channel ids must match the backend's ChannelID values.
+    await Notifications.setNotificationChannelAsync('requests', {
+      name: 'Talepler',
+      description: 'Talep linkiniz açıldığında ve yeni başvuru geldiğinde',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250],
+      lightColor: '#0B5CAD',
+    });
     await Notifications.setNotificationChannelAsync('social', {
-      name: 'Bankacı bildirimleri',
-      description:
-        'Müşteri talepleri, topluluk etkileşimleri ve hesap gelişmeleri',
+      name: 'Öğle Arası',
+      description: 'Topluluk gönderileri ve etkileşimleri',
+      importance: Notifications.AndroidImportance.DEFAULT,
+      vibrationPattern: [0, 200],
+      lightColor: '#0B5CAD',
+    });
+    await Notifications.setNotificationChannelAsync('announcements', {
+      name: 'Duyurular',
+      description: 'Bankacı ekibinden önemli duyurular',
       importance: Notifications.AndroidImportance.DEFAULT,
       vibrationPattern: [0, 200],
       lightColor: '#0B5CAD',
@@ -74,28 +126,39 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   const register = useCallback(async () => {
-    if (!session || !projectId || Platform.OS === 'web' || !Device.isDevice) {
+    if (!projectId || Platform.OS === 'web' || !Device.isDevice) {
       return false;
     }
     try {
-      await ensureAndroidChannel();
+      await ensureAndroidChannels();
       const result = await Notifications.getExpoPushTokenAsync({ projectId });
-      await apiRequest<void>('/v1/me/push-devices', {
-        method: 'POST',
-        token: session.token,
-        body: {
-          token: result.data,
-          platform: Platform.OS,
-          deviceName: Device.deviceName ?? Device.modelName ?? Platform.OS,
-        },
-      });
-      await setStoredExpoPushToken(result.data);
+      const token = result.data;
+      const payload = {
+        token,
+        platform: Platform.OS,
+        deviceName: Device.deviceName ?? Device.modelName ?? Platform.OS,
+      };
+      // A signed-in device links to the account (so personal notifications can
+      // reach it); a guest device registers for broadcasts only.
+      const nextPreferences = session
+        ? await apiRequest<NotificationPreferences>('/v1/me/push-devices', {
+            method: 'POST',
+            token: session.token,
+            body: payload,
+          })
+        : await apiRequest<NotificationPreferences>('/v1/devices', {
+            method: 'POST',
+            body: payload,
+          });
+      await setStoredExpoPushToken(token);
+      deviceTokenRef.current = token;
+      setPreferences(nextPreferences);
       setStatus('enabled');
       return true;
     } catch {
       return false;
     }
-  }, [ensureAndroidChannel, session]);
+  }, [ensureAndroidChannels, session]);
 
   const enableNotifications = useCallback(async () => {
     if (Platform.OS === 'web') {
@@ -103,7 +166,7 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
       return false;
     }
     try {
-      await ensureAndroidChannel();
+      await ensureAndroidChannels();
       let permission = await Notifications.getPermissionsAsync();
       if (!permissionAllowsNotifications(permission)) {
         permission = await Notifications.requestPermissionsAsync({
@@ -115,13 +178,36 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
         return false;
       }
       setStatus('enabled');
-      if (session) void register();
+      void register();
       return true;
     } catch {
       setStatus('unavailable');
       return false;
     }
-  }, [ensureAndroidChannel, register, session]);
+  }, [ensureAndroidChannels, register]);
+
+  const setPreference = useCallback(
+    async (category: NotificationCategory, enabled: boolean) => {
+      const previous = preferences;
+      const next = { ...preferences, [category]: enabled };
+      setPreferences(next); // optimistic
+      const token = deviceTokenRef.current ?? (await getStoredExpoPushToken());
+      if (!token) {
+        setPreferences(previous);
+        return;
+      }
+      try {
+        const saved = await apiRequest<NotificationPreferences>(
+          '/v1/devices/preferences',
+          { method: 'PATCH', body: { token, ...next } }
+        );
+        setPreferences(saved);
+      } catch {
+        setPreferences(previous); // roll back a change the server never took
+      }
+    },
+    [preferences]
+  );
 
   useEffect(() => {
     let active = true;
@@ -131,11 +217,10 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
     }
     void Notifications.getPermissionsAsync()
       .then((permission) => {
-        if (!active) return;
+        if (!active) return undefined;
         if (permissionAllowsNotifications(permission)) {
           setStatus('enabled');
-          if (session) void register();
-          return true;
+          return register();
         }
         if (permission.status === 'undetermined') {
           return enableNotifications();
@@ -147,12 +232,11 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
     return () => {
       active = false;
     };
-  }, [enableNotifications, register, session]);
+  }, [enableNotifications, register]);
 
   useEffect(() => {
-    const responseSubscription = Notifications.addNotificationResponseReceivedListener(
-      openNotification
-    );
+    const responseSubscription =
+      Notifications.addNotificationResponseReceivedListener(openNotification);
     void Notifications.getLastNotificationResponseAsync().then((response) => {
       if (response) openNotification(response);
     });
@@ -160,23 +244,23 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   useEffect(() => {
-    if (!session) return undefined;
     const tokenSubscription = Notifications.addPushTokenListener(() => {
       void register();
     });
     return () => tokenSubscription.remove();
-  }, [register, session]);
+  }, [register]);
 
   useEffect(() => {
-    if (!session || status !== 'enabled') return undefined;
+    if (status !== 'enabled') return undefined;
     return NetInfo.addEventListener((state) => {
-      if (state.isConnected && state.isInternetReachable !== false) void register();
+      if (state.isConnected && state.isInternetReachable !== false)
+        void register();
     });
-  }, [register, session, status]);
+  }, [register, status]);
 
   const value = useMemo(
-    () => ({ status, enableNotifications }),
-    [enableNotifications, status]
+    () => ({ status, enableNotifications, preferences, setPreference }),
+    [enableNotifications, preferences, setPreference, status]
   );
   return <PushContext.Provider value={value}>{children}</PushContext.Provider>;
 };

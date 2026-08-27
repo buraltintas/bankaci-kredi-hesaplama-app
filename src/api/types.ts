@@ -18,6 +18,16 @@ export type MemberSession = {
   user: Member;
 };
 
+// Per-device notification opt-outs. The server returns these on device
+// registration and preference updates.
+export type NotificationPreferences = {
+  requests: boolean;
+  feed: boolean;
+  announcements: boolean;
+};
+
+export type NotificationCategory = keyof NotificationPreferences;
+
 export type FeedAuthor = Pick<
   Member,
   'id' | 'displayName' | 'bankName' | 'jobTitle' | 'avatarUrl'
