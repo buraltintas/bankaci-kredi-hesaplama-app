@@ -5,7 +5,9 @@ const baseConfig = require('./app.json');
 const readAdMobAppIds = () => {
   const adConfigPath = path.join(process.cwd(), 'src/ads/adConfig.ts');
   const adConfigSource = fs.readFileSync(adConfigPath, 'utf8');
-  const appIdsBlock = adConfigSource.match(/export const ADMOB_APP_IDS[\s\S]*?= \{([\s\S]*?)\};/);
+  const appIdsBlock = adConfigSource.match(
+    /export const ADMOB_APP_IDS[\s\S]*?= \{([\s\S]*?)\};/,
+  );
   const iosAppId = appIdsBlock?.[1]?.match(/ios:\s*'([^']+)'/)?.[1];
   const androidAppId = appIdsBlock?.[1]?.match(/android:\s*'([^']+)'/)?.[1];
 
@@ -36,6 +38,7 @@ module.exports = ({ config: generatedConfig }) => {
     android: {
       ...(generatedConfig.android || {}),
       ...(baseConfig.expo.android || {}),
+      googleServicesFile: './google-services.json',
     },
     web: {
       ...(generatedConfig.web || {}),
