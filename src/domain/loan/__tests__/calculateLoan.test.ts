@@ -1100,7 +1100,40 @@ describe('calculateLoan', () => {
       expectResultTotalsToMatchSchedule(result);
     });
 
-    it('solves an interim balloon payment plan', () => {
+    it('matches a bank balloon plan exactly (2M, specials at 9/21/33/45)', () => {
+      // Reference plan from a real İş Bankası payment schedule: every automatic
+      // installment is 64.279,33; the last absorbs rounding to 64.278,88 and
+      // the balance closes at zero.
+      const result = calculateLoan({
+        principal: 2000000,
+        term: 60,
+        monthlyInterestRatePercent: 3.1,
+        kkdfRatePercent: 0,
+        bsmvRatePercent: 0,
+        creditUsageDate: new Date(2026, 7, 27),
+        firstInstallmentDate: new Date(2026, 8, 27),
+        deductFirstInstallmentDelayFromTerm: false,
+        planType: 'customPayment',
+        customPayments: [9, 21, 33, 45].map((installmentNo) => ({
+          installmentNo,
+          amount: 200000,
+        })),
+      });
+
+      expectCloseWithin(result.automaticInstallmentAmount ?? 0, 64279.33, 0.01);
+      expectCloseWithin(result.totalPayment, 4399642.03, 0.02);
+      // Row 1 and a couple of interior rows against the bank's printout.
+      expectCloseWithin(result.schedule[0].principal, 2279.33, 0.01);
+      expectCloseWithin(result.schedule[0].interest, 62000, 0.01);
+      expect(result.schedule[8].isCustomPayment).toBe(true);
+      expect(result.schedule[8].installment).toBe(200000);
+      expectCloseWithin(result.schedule[8].remainingPrincipal, 1841028.8, 0.05);
+      expectCloseWithin(result.schedule[59].installment, 64278.88, 0.01);
+      expect(result.schedule[59].remainingPrincipal).toBe(0);
+      expectResultTotalsToMatchSchedule(result);
+    });
+
+    it('keeps automatic installments uniform in a balloon plan', () => {
       const result = calculateLoan({
         ...customPaymentBaseInput,
         principal: 300000,
@@ -1111,48 +1144,41 @@ describe('calculateLoan', () => {
         customPayments: [{ installmentNo: 6, amount: 100000 }],
       });
 
-      expectCloseWithin(result.automaticInstallmentAmount ?? 0, 30138.63, 0.05);
+      expectCloseWithin(result.automaticInstallmentAmount ?? 0, 23720.85, 0.05);
       expect(result.schedule[0].isCustomPayment).toBe(false);
+      // Every non-closing automatic installment is the same, like the bank.
+      expect(result.schedule[0].installment).toBe(result.schedule[6].installment);
       expect(result.schedule[4].isCustomPayment).toBe(false);
       expect(result.schedule[5].isCustomPayment).toBe(true);
       expect(result.schedule[5].installment).toBe(100000);
-      expectCloseWithin(result.schedule[5].interest, 5633.16, 0.1);
-      expectCloseWithin(result.schedule[5].principal, 94366.84, 0.1);
+      expectCloseWithin(result.schedule[5].interest, 6655.35, 0.1);
+      expectCloseWithin(result.schedule[5].principal, 93344.65, 0.1);
       expect(result.schedule[6].isCustomPayment).toBe(false);
-      expectCloseWithin(result.schedule[6].installment, 17242.39, 0.1);
-      expectCloseWithin(result.totalInterest, 54147.46, 0.1);
-      expectCloseWithin(result.totalPayment, 354147.46, 0.1);
+      expectCloseWithin(result.schedule[6].installment, 23720.85, 0.1);
+      expectCloseWithin(result.totalInterest, 60929.31, 0.1);
+      expectCloseWithin(result.totalPayment, 360929.31, 0.1);
       expect(result.schedule[11].remainingPrincipal).toBe(0);
       expectResultTotalsToMatchSchedule(result);
     });
 
-    it('recalculates automatic installments after a standalone interim payment', () => {
-      const result = calculateLoan({
-        ...customPaymentBaseInput,
-        principal: 3000000,
-        term: 60,
-        monthlyInterestRatePercent: 3.1,
-        kkdfRatePercent: 0,
-        bsmvRatePercent: 0,
-        customPayments: [{ installmentNo: 6, amount: 1000000 }],
-      });
-
-      expect(result.schedule.slice(0, 5).every((item) => !item.isCustomPayment)).toBe(
-        true
-      );
-      expectCloseWithin(result.automaticInstallmentAmount ?? 0, 110731.79, 0.1);
-      expect(result.schedule[5].isCustomPayment).toBe(true);
-      expect(result.schedule[5].installment).toBe(1000000);
-      expectCloseWithin(result.schedule[5].principal, 909924.19, 0.1);
-      expectCloseWithin(result.schedule[5].remainingPrincipal, 1995746.94, 0.1);
-      expect(result.schedule[6].isCustomPayment).toBe(false);
-      expectCloseWithin(result.schedule[6].installment, 76600.16, 0.1);
-      expect(result.schedule[59].remainingPrincipal).toBe(0);
-      expect(result.totalPrincipal).toBe(3000000);
-      expectResultTotalsToMatchSchedule(result);
+    it('rejects a balloon too large for uniform installments to cover interest', () => {
+      // A 1M balloon at month 6 of a 3M/60 loan forces the equal installment
+      // below the monthly interest; banks do not allow that negative
+      // amortization, so the plan has no valid uniform solution.
+      expect(() =>
+        calculateLoan({
+          ...customPaymentBaseInput,
+          principal: 3000000,
+          term: 60,
+          monthlyInterestRatePercent: 3.1,
+          kkdfRatePercent: 0,
+          bsmvRatePercent: 0,
+          customPayments: [{ installmentNo: 6, amount: 1000000 }],
+        })
+      ).toThrow('faiz ve vergi');
     });
 
-    it('recalculates each automatic segment after multiple interim payments', () => {
+    it('keeps automatic installments uniform across multiple interim payments', () => {
       const result = calculateLoan({
         ...customPaymentBaseInput,
         principal: 500000,
@@ -1166,13 +1192,19 @@ describe('calculateLoan', () => {
         ],
       });
 
-      expectCloseWithin(result.automaticInstallmentAmount ?? 0, 27956.41, 0.1);
+      expectCloseWithin(result.automaticInstallmentAmount ?? 0, 21991.57, 0.05);
       expect(result.schedule[5].isCustomPayment).toBe(true);
       expect(result.schedule[5].installment).toBe(100000);
-      expectCloseWithin(result.schedule[6].installment, 22937.13, 0.1);
+      expectCloseWithin(result.schedule[6].installment, 21991.57, 0.1);
       expect(result.schedule[11].isCustomPayment).toBe(true);
       expect(result.schedule[11].installment).toBe(75000);
-      expectCloseWithin(result.schedule[12].installment, 17861.63, 0.1);
+      expectCloseWithin(result.schedule[12].installment, 21991.57, 0.1);
+      // Every automatic installment but the closing one equals the uniform
+      // amount; the last absorbs rounding so the balance ends at zero.
+      result.schedule
+        .filter((item) => !item.isCustomPayment)
+        .slice(0, -1)
+        .forEach((item) => expectCloseWithin(item.installment, 21991.57, 0.05));
       expect(result.schedule[23].remainingPrincipal).toBe(0);
       expect(result.totalPrincipal).toBe(500000);
       expectResultTotalsToMatchSchedule(result);

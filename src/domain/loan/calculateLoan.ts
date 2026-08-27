@@ -843,27 +843,6 @@ const calculateCarryingCost = (
   return { interest, kkdf, bsmv, carryingCost };
 };
 
-const calculateRemainingAfterCustomPayment = (
-  remainingPrincipal: number,
-  installmentNumber: number,
-  customPaymentAmount: number,
-  monthlyInterestRate: number,
-  kkdfRate: number,
-  bsmvRate: number,
-  brokenPeriod: BrokenPeriodInfo
-): number => {
-  const { carryingCost } = calculateCarryingCost(
-    remainingPrincipal,
-    installmentNumber,
-    monthlyInterestRate,
-    kkdfRate,
-    bsmvRate,
-    brokenPeriod
-  );
-
-  return roundToCents(remainingPrincipal + carryingCost - customPaymentAmount);
-};
-
 const buildCustomPaymentItem = (
   input: LoanInput,
   remainingPrincipal: number,
@@ -944,123 +923,104 @@ const buildCustomPaymentItem = (
   };
 };
 
-const simulateAutomaticSegmentRemaining = (
-  startRemainingPrincipal: number,
-  startInstallmentNumber: number,
-  segmentLength: number,
-  automaticInstallmentAmount: number,
+const simulateUniformRemaining = (
+  input: LoanInput,
+  uniformAmount: number,
   monthlyInterestRate: number,
   kkdfRate: number,
   bsmvRate: number,
+  customPaymentMap: CustomPaymentMap,
   brokenPeriod: BrokenPeriodInfo
 ): number => {
-  let remainingPrincipal = startRemainingPrincipal;
+  let remaining = input.principal;
 
-  for (let offset = 0; offset < segmentLength; offset += 1) {
-    const installmentNumber = startInstallmentNumber + offset;
+  for (let installmentNumber = 1; installmentNumber <= input.term; installmentNumber += 1) {
+    const customPaymentAmount = customPaymentMap.get(installmentNumber);
     const { carryingCost } = calculateCarryingCost(
-      remainingPrincipal,
+      remaining,
       installmentNumber,
       monthlyInterestRate,
       kkdfRate,
       bsmvRate,
       brokenPeriod
     );
-
-    if (automaticInstallmentAmount < carryingCost) {
-      return Number.POSITIVE_INFINITY;
-    }
-
-    let principal = roundToCents(automaticInstallmentAmount - carryingCost);
-
-    if (Math.abs(principal) < 0.01) {
-      principal = 0;
-    }
-
-    if (principal > remainingPrincipal + 0.01) {
-      return Number.NEGATIVE_INFINITY;
-    }
-
-    remainingPrincipal = roundToCents(remainingPrincipal - principal);
-
-    if (Math.abs(remainingPrincipal) < 0.01) {
-      remainingPrincipal = 0;
-    }
+    const payment =
+      customPaymentAmount !== undefined ? customPaymentAmount : uniformAmount;
+    const principal = roundToCents(payment - carryingCost);
+    remaining = roundToCents(remaining - principal);
   }
 
-  return remainingPrincipal;
+  return remaining;
 };
 
-const solveAutomaticSegmentInstallment = (
-  startRemainingPrincipal: number,
-  startInstallmentNumber: number,
-  segmentLength: number,
-  targetRemainingPrincipal: number,
+// A balloon plan keeps every automatic installment equal, exactly as banks do.
+// Solve the single amount that, together with the fixed special payments, drives
+// the balance to zero at term. The closing balance is monotonic decreasing in
+// that amount, so binary search converges.
+const solveUniformAutomaticInstallment = (
+  input: LoanInput,
   monthlyInterestRate: number,
   kkdfRate: number,
   bsmvRate: number,
+  customPaymentMap: CustomPaymentMap,
   brokenPeriod: BrokenPeriodInfo
 ): number => {
-  if (segmentLength <= 0) {
-    return 0;
-  }
-
   let low = 0;
   let high = Math.max(
     calculateStandardInstallment(
-      startRemainingPrincipal,
-      segmentLength,
+      input.principal,
+      input.term,
       monthlyInterestRate,
       kkdfRate,
       bsmvRate
     ),
     0.01
   );
-  let highRemaining = simulateAutomaticSegmentRemaining(
-    startRemainingPrincipal,
-    startInstallmentNumber,
-    segmentLength,
-    high,
-    monthlyInterestRate,
-    kkdfRate,
-    bsmvRate,
-    brokenPeriod
-  );
   let guard = 0;
 
-  while (highRemaining > targetRemainingPrincipal && guard < 60) {
-    high *= 2;
-    highRemaining = simulateAutomaticSegmentRemaining(
-      startRemainingPrincipal,
-      startInstallmentNumber,
-      segmentLength,
+  while (
+    simulateUniformRemaining(
+      input,
       high,
       monthlyInterestRate,
       kkdfRate,
       bsmvRate,
+      customPaymentMap,
       brokenPeriod
-    );
+    ) > 0 &&
+    guard < 60
+  ) {
+    high *= 2;
     guard += 1;
   }
 
-  if (highRemaining > targetRemainingPrincipal) {
+  if (
+    simulateUniformRemaining(
+      input,
+      high,
+      monthlyInterestRate,
+      kkdfRate,
+      bsmvRate,
+      customPaymentMap,
+      brokenPeriod
+    ) > 0
+  ) {
     throw new Error('Özel ödeme planı için otomatik taksit çözülemedi.');
   }
 
   for (let iteration = 0; iteration < CUSTOM_PAYMENT_MAX_ITERATIONS; iteration += 1) {
     const middle = (low + high) / 2;
-    const remaining = simulateAutomaticSegmentRemaining(
-      startRemainingPrincipal,
-      startInstallmentNumber,
-      segmentLength,
+    const remaining = simulateUniformRemaining(
+      input,
       middle,
       monthlyInterestRate,
       kkdfRate,
       bsmvRate,
+      customPaymentMap,
       brokenPeriod
     );
 
-    if (remaining > targetRemainingPrincipal) {
+    if (remaining > 0) {
       low = middle;
     } else {
       high = middle;
@@ -1068,54 +1028,6 @@ const solveAutomaticSegmentInstallment = (
   }
 
   return roundToCents(high);
-};
-
-const solveRemainingBeforeFinalCustomPayment = (
-  maxRemainingPrincipal: number,
-  installmentNumber: number,
-  customPaymentAmount: number,
-  monthlyInterestRate: number,
-  kkdfRate: number,
-  bsmvRate: number,
-  brokenPeriod: BrokenPeriodInfo
-): number => {
-  const remainingAtMax = calculateRemainingAfterCustomPayment(
-    maxRemainingPrincipal,
-    installmentNumber,
-    customPaymentAmount,
-    monthlyInterestRate,
-    kkdfRate,
-    bsmvRate,
-    brokenPeriod
-  );
-
-  if (remainingAtMax < -0.01) {
-    throw new Error('Özel ödeme kalan anaparayı negatife düşüremez.');
-  }
-
-  let low = 0;
-  let high = maxRemainingPrincipal;
-
-  for (let iteration = 0; iteration < CUSTOM_PAYMENT_MAX_ITERATIONS; iteration += 1) {
-    const middle = (low + high) / 2;
-    const finalRemaining = calculateRemainingAfterCustomPayment(
-      middle,
-      installmentNumber,
-      customPaymentAmount,
-      monthlyInterestRate,
-      kkdfRate,
-      bsmvRate,
-      brokenPeriod
-    );
-
-    if (finalRemaining > 0) {
-      high = middle;
-    } else {
-      low = middle;
-    }
-  }
-
-  return roundToCents((low + high) / 2);
 };
 
 const buildCustomPaymentSchedule = (
@@ -1126,17 +1038,49 @@ const buildCustomPaymentSchedule = (
   customPaymentMap: CustomPaymentMap,
   brokenPeriod: BrokenPeriodInfo
 ): { schedule: PaymentScheduleItem[]; automaticInstallmentAmount?: number } => {
-  const customInstallmentNumbers = [...customPaymentMap.keys()].sort((a, b) => a - b);
+  // The last automatic installment closes the plan. If the loan ends on one or
+  // more fixed special payments, that installment targets the balance those
+  // trailing payments need to reach zero, absorbing the rounding drift of the
+  // uniform amount so the final special clears exactly. With no trailing
+  // special the target is zero, i.e. a plain final-installment close.
+  let lastRegularInstallment = 0;
+  for (let installmentNumber = input.term; installmentNumber >= 1; installmentNumber -= 1) {
+    if (!customPaymentMap.has(installmentNumber)) {
+      lastRegularInstallment = installmentNumber;
+      break;
+    }
+  }
+
+  // Only a plan with at least one automatic installment has an amount to solve.
+  // A plan made entirely of special payments stands or falls on those amounts
+  // alone; the closing check below rejects it if they miss zero.
+  const uniformAmount =
+    lastRegularInstallment > 0
+      ? solveUniformAutomaticInstallment(
+          input,
+          monthlyInterestRate,
+          kkdfRate,
+          bsmvRate,
+          customPaymentMap,
+          brokenPeriod
+        )
+      : 0;
+  const carryingRate = monthlyInterestRate * (1 + kkdfRate + bsmvRate);
+  let targetAfterLastRegular = 0;
+  for (
+    let installmentNumber = input.term;
+    installmentNumber > lastRegularInstallment;
+    installmentNumber -= 1
+  ) {
+    const trailingSpecial = customPaymentMap.get(installmentNumber) ?? 0;
+    targetAfterLastRegular = roundToCents(
+      (targetAfterLastRegular + trailingSpecial) / (1 + carryingRate)
+    );
+  }
+
   const schedule: PaymentScheduleItem[] = [];
   let remainingPrincipal = input.principal;
   let automaticInstallmentAmount: number | undefined;
-  let currentSegment:
-    | {
-        endInstallmentNumber: number;
-        amount: number;
-        targetRemainingPrincipal?: number;
-      }
-    | undefined;
 
   for (let installmentNumber = 1; installmentNumber <= input.term; installmentNumber += 1) {
     const customPaymentAmount = customPaymentMap.get(installmentNumber);
@@ -1155,65 +1099,7 @@ const buildCustomPaymentSchedule = (
 
       schedule.push(item);
       remainingPrincipal = item.remainingPrincipal;
-      currentSegment = undefined;
       continue;
-    }
-
-    if (!currentSegment || installmentNumber > currentSegment.endInstallmentNumber) {
-      const nextCustomInstallmentNumber = customInstallmentNumbers.find(
-        (customInstallmentNumber) => customInstallmentNumber > installmentNumber
-      );
-      const segmentEndInstallmentNumber =
-        nextCustomInstallmentNumber !== undefined
-          ? nextCustomInstallmentNumber - 1
-          : input.term;
-      const segmentLength =
-        segmentEndInstallmentNumber - installmentNumber + 1;
-      let segmentAmount: number;
-      let targetRemainingPrincipal: number | undefined;
-
-      if (nextCustomInstallmentNumber === input.term) {
-        targetRemainingPrincipal = solveRemainingBeforeFinalCustomPayment(
-          remainingPrincipal,
-          nextCustomInstallmentNumber,
-          customPaymentMap.get(nextCustomInstallmentNumber) ?? 0,
-          monthlyInterestRate,
-          kkdfRate,
-          bsmvRate,
-          brokenPeriod
-        );
-        segmentAmount = solveAutomaticSegmentInstallment(
-          remainingPrincipal,
-          installmentNumber,
-          segmentLength,
-          targetRemainingPrincipal,
-          monthlyInterestRate,
-          kkdfRate,
-          bsmvRate,
-          brokenPeriod
-        );
-      } else {
-        segmentAmount = solveAutomaticSegmentInstallment(
-          remainingPrincipal,
-          installmentNumber,
-          input.term - installmentNumber + 1,
-          0,
-          monthlyInterestRate,
-          kkdfRate,
-          bsmvRate,
-          brokenPeriod
-        );
-      }
-
-      currentSegment = {
-        endInstallmentNumber: segmentEndInstallmentNumber,
-        amount: segmentAmount,
-        targetRemainingPrincipal,
-      };
-
-      if (automaticInstallmentAmount === undefined) {
-        automaticInstallmentAmount = segmentAmount;
-      }
     }
 
     const { interest, kkdf, bsmv, carryingCost } = calculateCarryingCost(
@@ -1224,24 +1110,38 @@ const buildCustomPaymentSchedule = (
       bsmvRate,
       brokenPeriod
     );
-    const isLastAutomaticInSegment =
-      installmentNumber === currentSegment.endInstallmentNumber;
-    const targetRemainingPrincipal =
-      isLastAutomaticInSegment && currentSegment.targetRemainingPrincipal !== undefined
-        ? currentSegment.targetRemainingPrincipal
-        : installmentNumber === input.term
-          ? 0
-          : undefined;
-    let principal =
-      targetRemainingPrincipal !== undefined
-        ? roundToCents(remainingPrincipal - targetRemainingPrincipal)
-        : roundToCents(currentSegment.amount - carryingCost);
+
+    // The closing (last automatic) installment absorbs rounding so the balance
+    // reaches its target exactly — zero when the plan ends on an automatic
+    // installment, or the amount the trailing special payments will clear.
+    const isClosingInstallment = installmentNumber === lastRegularInstallment;
+    let principal: number;
+    let installment: number;
+
+    if (isClosingInstallment) {
+      // Closes the plan on the balance the trailing special payments need,
+      // absorbing rounding drift so the schedule ends at exactly zero.
+      principal = roundToCents(remainingPrincipal - targetAfterLastRegular);
+      installment = roundToCents(principal + carryingCost);
+    } else {
+      // Every automatic installment is the same amount, like the bank. A
+      // balloon so large that this amount cannot even cover the interest has no
+      // equal-installment solution without negative amortization, which banks
+      // do not allow — reject it rather than emit a growing balance.
+      if (uniformAmount < carryingCost) {
+        throw new Error(
+          'Otomatik taksit tutarı ilgili dönemin faiz ve vergi tutarını karşılayamıyor.'
+        );
+      }
+      principal = roundToCents(uniformAmount - carryingCost);
+      installment = uniformAmount;
+    }
 
     if (Math.abs(principal) < 0.01) {
       principal = 0;
     }
 
-    if (principal < 0 || currentSegment.amount < carryingCost) {
+    if (principal < 0) {
       throw new Error(
         'Otomatik taksit tutarı ilgili dönemin faiz ve vergi tutarını karşılayamıyor.'
       );
@@ -1253,15 +1153,14 @@ const buildCustomPaymentSchedule = (
 
     principal = Math.min(principal, remainingPrincipal);
 
-    const installment =
-      targetRemainingPrincipal !== undefined
-        ? roundToCents(principal + carryingCost)
-        : currentSegment.amount;
-
     remainingPrincipal = roundToCents(remainingPrincipal - principal);
 
     if (Math.abs(remainingPrincipal) < 0.01) {
       remainingPrincipal = 0;
+    }
+
+    if (automaticInstallmentAmount === undefined) {
+      automaticInstallmentAmount = uniformAmount;
     }
 
     schedule.push({
@@ -1275,6 +1174,10 @@ const buildCustomPaymentSchedule = (
       remainingPrincipal,
       isCustomPayment: false,
     });
+  }
+
+  if (Math.abs(remainingPrincipal) > 0.01) {
+    throw new Error('Özel ödemeler krediyi vade sonunda sıfırlayamıyor.');
   }
 
   return { schedule, automaticInstallmentAmount };

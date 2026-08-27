@@ -263,14 +263,6 @@ describe('final red-team regression', () => {
     const validCases: LoanInput[] = [
       {
         ...baseInput,
-        principal: 3000000,
-        term: 60,
-        monthlyInterestRatePercent: 3.1,
-        planType: 'customPayment',
-        customPayments: [{ installmentNo: 6, amount: 1000000 }],
-      },
-      {
-        ...baseInput,
         principal: 100000,
         term: 12,
         monthlyInterestRatePercent: 2,
@@ -363,6 +355,19 @@ describe('final red-team regression', () => {
 
       expectValidResult(result, input.principal, input.term);
     });
+
+    // A 1M balloon at month 6 of a 3M/60 loan has no equal-installment
+    // solution without negative amortization, so it is rejected outright.
+    expect(() =>
+      calculateLoan({
+        ...baseInput,
+        principal: 3000000,
+        term: 60,
+        monthlyInterestRatePercent: 3.1,
+        planType: 'customPayment',
+        customPayments: [{ installmentNo: 6, amount: 1000000 }],
+      })
+    ).toThrow('faiz ve vergi');
 
     expect(() =>
       calculateLoan({

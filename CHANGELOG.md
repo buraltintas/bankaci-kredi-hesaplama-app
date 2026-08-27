@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Balon ödeme planı banka hesabıyla eşitlendi
+
+- Özel / balon ödeme planında otomatik taksitler artık her dönem **eşit** (bankaların yaptığı gibi); önceki sürüm özel ödemelerden sonra taksitleri kalan vadeye yeniden yayarak azaltıyordu. Tek bir uniform taksit, özel ödemeler dahil çizelgeyi vade sonunda sıfıra indirecek şekilde çözülüyor; son otomatik taksit yuvarlama farkını yutuyor. Gerçek bir İş Bankası ödeme planıyla kuruş kuruşuna doğrulandı.
+- Vade sonunda özel ödeme, vade düşümü ve çok sayıda ara ödeme durumları da eşit-taksit modeliyle doğru çözülüyor. Eşit taksitin faizi karşılayamayacağı kadar büyük ve erken bir balon (negatif amortizasyon gerektiren) geçersiz kabul edilip reddediliyor.
+
 ## Unreleased — Talep yönetimi ve hesaplama menüsü
 
 - Alt menü `Hesaplama`, `Talepler`, `Öğle Arası`, `Ayarlar` olarak sadeleştirildi.
