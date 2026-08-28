@@ -205,9 +205,34 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
       await ensureAndroidChannels();
       pushDiagnostic('android_channels_ready', { platform: Platform.OS });
       stage = 'expo_token';
-      const result = await Notifications.getExpoPushTokenAsync({
-        projectId: configuredProjectId,
-      });
+      // On iOS the APNs device token is often not ready in the moment right
+      // after the permission grant, so a single getExpoPushTokenAsync call can
+      // throw ("no APNs token" / registration not yet complete). Retry with a
+      // short backoff instead of giving up on the first miss.
+      let result: Notifications.ExpoPushToken | undefined;
+      let lastTokenError: unknown;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        try {
+          result = await Notifications.getExpoPushTokenAsync({
+            projectId: configuredProjectId,
+          });
+          break;
+        } catch (tokenError) {
+          lastTokenError = tokenError;
+          pushDiagnostic('expo_token_retry', {
+            platform: Platform.OS,
+            attempt,
+          });
+          if (attempt < 3) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 1500 * (attempt + 1))
+            );
+          }
+        }
+      }
+      if (!result) {
+        throw lastTokenError ?? new Error('expo_token_unavailable');
+      }
       const token = result.data;
       pushDiagnostic('expo_token_created', {
         platform: Platform.OS,

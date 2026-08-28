@@ -271,6 +271,14 @@ describe('PushNotificationProvider registration', () => {
   });
 
   it('logs token generation failures without calling the backend', async () => {
+    // Token acquisition retries with a backoff; make the delays resolve
+    // instantly so the failure path completes within the test.
+    const timeoutSpy = jest
+      .spyOn(global, 'setTimeout')
+      .mockImplementation(((cb: () => void) => {
+        cb();
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout);
     getExpoPushTokenMock.mockRejectedValue(new Error('native token failed'));
     let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -281,6 +289,7 @@ describe('PushNotificationProvider registration', () => {
     await flushEffects();
 
     expect(apiRequestMock).not.toHaveBeenCalled();
+    expect(getExpoPushTokenMock.mock.calls.length).toBeGreaterThan(1);
     expect(console.error).toHaveBeenCalledWith(
       '[push] registration_failed',
       expect.objectContaining({
@@ -288,6 +297,7 @@ describe('PushNotificationProvider registration', () => {
         message: 'native token failed',
       })
     );
+    timeoutSpy.mockRestore();
     tree.unmount();
   });
 

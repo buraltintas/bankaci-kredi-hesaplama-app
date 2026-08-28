@@ -2,6 +2,10 @@
 
 ## Unreleased — Push tanısı ve talep/hesaplama düzeltmeleri
 
+- iOS'ta izin verildikten hemen sonra APNs cihaz token'ı çoğu zaman hazır
+  olmadığından `getExpoPushTokenAsync` ilk denemede hata verebiliyor; token
+  alımı artık kısa bir backoff ile birkaç kez deneniyor. Cihazın hiç
+  kaydolamamasının muhtemel sebebi buydu.
 - Push kaydı başarısız olduğunda hata (hangi aşamada ve neden) Ayarlar'daki
   bildirim kartında gösteriliyor. iOS'ta cihazın sessizce hiç kaydolmamasının
   sebebini yüzeye çıkarmak için geçici bir tanı; sebep bulununca kaldırılacak.
