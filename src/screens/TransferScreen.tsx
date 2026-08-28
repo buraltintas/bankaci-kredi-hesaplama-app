@@ -648,6 +648,9 @@ const styles = StyleSheet.create({
   },
   animatedContent: {
     gap: spacing.lg,
+    // Breathing room below the sticky tabs, matching the individual and
+    // commercial calculators.
+    marginTop: spacing.lg,
   },
   scrollView: {
     flex: 1,

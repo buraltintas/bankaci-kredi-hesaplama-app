@@ -13,7 +13,7 @@ import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import NetInfo from '@react-native-community/netinfo';
-import { apiRequest } from '../api/client';
+import { APIError, apiRequest } from '../api/client';
 import type {
   NotificationCategory,
   NotificationPreferences,
@@ -55,6 +55,9 @@ type PushContextValue = {
     category: NotificationCategory,
     enabled: boolean
   ) => Promise<void>;
+  // Temporary diagnostic: the reason the last token registration failed, so an
+  // iOS device that silently never registers can surface the cause on screen.
+  registrationError: string | null;
 };
 
 const PushContext = createContext<PushContextValue>({
@@ -62,10 +65,39 @@ const PushContext = createContext<PushContextValue>({
   enableNotifications: async () => false,
   preferences: DEFAULT_PREFERENCES,
   setPreference: async () => undefined,
+  registrationError: null,
 });
 
-const projectId =
+const getExpoProjectId = () =>
   Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+
+type RegistrationStage =
+  | 'preflight'
+  | 'android_channels'
+  | 'expo_token'
+  | 'backend_registration'
+  | 'token_storage';
+
+const pushDiagnostic = (
+  event: string,
+  details: Record<string, unknown> = {}
+) => {
+  console.info(`[push] ${event}`, details);
+};
+
+const pushDiagnosticError = (
+  event: string,
+  error: unknown,
+  details: Record<string, unknown> = {}
+) => {
+  const safeError =
+    error instanceof APIError
+      ? { errorType: 'APIError', status: error.status, code: error.code }
+      : error instanceof Error
+        ? { errorType: error.name, message: error.message }
+        : { errorType: typeof error };
+  console.error(`[push] ${event}`, { ...details, ...safeError });
+};
 
 const permissionAllowsNotifications = (
   permission: Notifications.NotificationPermissionsStatus
@@ -94,10 +126,23 @@ const openNotification = (response: Notifications.NotificationResponse) => {
 
 export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
   const { session } = useAuth();
+  const configuredProjectId = getExpoProjectId();
   const [status, setStatus] = useState<PushStatus>('checking');
   const [preferences, setPreferences] =
     useState<NotificationPreferences>(DEFAULT_PREFERENCES);
   const deviceTokenRef = useRef<string | null>(null);
+  const registrationInFlightRef = useRef(false);
+  const [registrationError, setRegistrationError] = useState<string | null>(
+    null
+  );
+
+  useEffect(() => {
+    pushDiagnostic('provider_mounted', {
+      platform: Platform.OS,
+      isDevice: Device.isDevice,
+      hasProjectId: Boolean(configuredProjectId),
+    });
+  }, [configuredProjectId]);
 
   const ensureAndroidChannels = useCallback(async () => {
     if (Platform.OS !== 'android') return;
@@ -125,14 +170,49 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
     });
   }, []);
 
-  const register = useCallback(async () => {
-    if (!projectId || Platform.OS === 'web' || !Device.isDevice) {
+  const register = useCallback(async (reason: string = 'manual') => {
+    pushDiagnostic('registration_started', {
+      platform: Platform.OS,
+      reason,
+      isDevice: Device.isDevice,
+      hasProjectId: Boolean(configuredProjectId),
+      authenticated: Boolean(session),
+    });
+    if (Platform.OS === 'web') {
+      pushDiagnostic('registration_skipped', { reason: 'web' });
       return false;
     }
+    if (!configuredProjectId) {
+      pushDiagnostic('registration_skipped', { reason: 'missing_project_id' });
+      setStatus('unavailable');
+      return false;
+    }
+    if (!Device.isDevice) {
+      pushDiagnostic('registration_skipped', { reason: 'not_physical_device' });
+      setStatus('unavailable');
+      return false;
+    }
+    if (registrationInFlightRef.current) {
+      pushDiagnostic('registration_skipped', {
+        reason: 'registration_in_flight',
+      });
+      return false;
+    }
+    registrationInFlightRef.current = true;
+    let stage: RegistrationStage = 'preflight';
     try {
+      stage = 'android_channels';
       await ensureAndroidChannels();
-      const result = await Notifications.getExpoPushTokenAsync({ projectId });
+      pushDiagnostic('android_channels_ready', { platform: Platform.OS });
+      stage = 'expo_token';
+      const result = await Notifications.getExpoPushTokenAsync({
+        projectId: configuredProjectId,
+      });
       const token = result.data;
+      pushDiagnostic('expo_token_created', {
+        platform: Platform.OS,
+        tokenPresent: token.length > 0,
+      });
       const payload = {
         token,
         platform: Platform.OS,
@@ -140,25 +220,49 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
       };
       // A signed-in device links to the account (so personal notifications can
       // reach it); a guest device registers for broadcasts only.
+      const endpoint = session ? '/v1/me/push-devices' : '/v1/devices';
+      stage = 'backend_registration';
+      pushDiagnostic('backend_registration_started', {
+        endpoint,
+        authenticated: Boolean(session),
+      });
       const nextPreferences = session
-        ? await apiRequest<NotificationPreferences>('/v1/me/push-devices', {
+        ? await apiRequest<NotificationPreferences>(endpoint, {
             method: 'POST',
             token: session.token,
             body: payload,
           })
-        : await apiRequest<NotificationPreferences>('/v1/devices', {
+        : await apiRequest<NotificationPreferences>(endpoint, {
             method: 'POST',
             body: payload,
           });
+      pushDiagnostic('backend_registration_succeeded', { endpoint });
+      stage = 'token_storage';
       await setStoredExpoPushToken(token);
       deviceTokenRef.current = token;
       setPreferences(nextPreferences);
       setStatus('enabled');
+      setRegistrationError(null);
       return true;
-    } catch {
+    } catch (error: unknown) {
+      pushDiagnosticError('registration_failed', error, {
+        platform: Platform.OS,
+        reason,
+        stage,
+        authenticated: Boolean(session),
+      });
+      const detail =
+        error instanceof APIError
+          ? `API ${error.status}${error.code ? ` ${error.code}` : ''}`
+          : error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : String(error);
+      setRegistrationError(`${stage} — ${detail}`);
       return false;
+    } finally {
+      registrationInFlightRef.current = false;
     }
-  }, [ensureAndroidChannels, session]);
+  }, [configuredProjectId, ensureAndroidChannels, session]);
 
   const enableNotifications = useCallback(async () => {
     if (Platform.OS === 'web') {
@@ -168,9 +272,19 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
     try {
       await ensureAndroidChannels();
       let permission = await Notifications.getPermissionsAsync();
+      pushDiagnostic('permission_checked', {
+        platform: Platform.OS,
+        status: permission.status,
+        granted: permissionAllowsNotifications(permission),
+      });
       if (!permissionAllowsNotifications(permission)) {
         permission = await Notifications.requestPermissionsAsync({
           ios: { allowAlert: true, allowBadge: true, allowSound: true },
+        });
+        pushDiagnostic('permission_requested', {
+          platform: Platform.OS,
+          status: permission.status,
+          granted: permissionAllowsNotifications(permission),
         });
       }
       if (!permissionAllowsNotifications(permission)) {
@@ -178,9 +292,11 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
         return false;
       }
       setStatus('enabled');
-      void register();
-      return true;
-    } catch {
+      return await register('permission_enabled');
+    } catch (error: unknown) {
+      pushDiagnosticError('permission_flow_failed', error, {
+        platform: Platform.OS,
+      });
       setStatus('unavailable');
       return false;
     }
@@ -218,17 +334,27 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
     void Notifications.getPermissionsAsync()
       .then((permission) => {
         if (!active) return undefined;
+        pushDiagnostic('initial_permission_resolved', {
+          platform: Platform.OS,
+          status: permission.status,
+          granted: permissionAllowsNotifications(permission),
+        });
         if (permissionAllowsNotifications(permission)) {
           setStatus('enabled');
-          return register();
+          return register('existing_permission');
         }
-        if (permission.status === 'undetermined') {
+        if (permission.canAskAgain) {
           return enableNotifications();
         }
         setStatus('denied');
         return false;
       })
-      .catch(() => active && setStatus('unavailable'));
+      .catch((error: unknown) => {
+        pushDiagnosticError('initial_permission_failed', error, {
+          platform: Platform.OS,
+        });
+        if (active) setStatus('unavailable');
+      });
     return () => {
       active = false;
     };
@@ -245,7 +371,7 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
 
   useEffect(() => {
     const tokenSubscription = Notifications.addPushTokenListener(() => {
-      void register();
+      void register('native_token_changed');
     });
     return () => tokenSubscription.remove();
   }, [register]);
@@ -254,13 +380,19 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
     if (status !== 'enabled') return undefined;
     return NetInfo.addEventListener((state) => {
       if (state.isConnected && state.isInternetReachable !== false)
-        void register();
+        void register('network_available');
     });
   }, [register, status]);
 
   const value = useMemo(
-    () => ({ status, enableNotifications, preferences, setPreference }),
-    [enableNotifications, preferences, setPreference, status]
+    () => ({
+      status,
+      enableNotifications,
+      preferences,
+      setPreference,
+      registrationError,
+    }),
+    [enableNotifications, preferences, registrationError, setPreference, status]
   );
   return <PushContext.Provider value={value}>{children}</PushContext.Provider>;
 };

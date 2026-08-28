@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — OTA güncelleme, push tanısı ve talep/hesaplama düzeltmeleri
+
+- EAS Update (OTA) eklendi: bundan sonra yalnızca JS içeren düzeltmeler tam
+  yeniden derleme gerektirmeden `eas update` ile cihazlara ulaşır.
+- Push kaydı başarısız olduğunda hata (hangi aşamada ve neden) Ayarlar'daki
+  bildirim kartında gösteriliyor. iOS'ta cihazın sessizce hiç kaydolmamasının
+  sebebini yüzeye çıkarmak için geçici bir tanı; sebep bulununca kaldırılacak.
+- Talepler: bir talebin durumu (Görüşüldü / Kapandı) artık kartta rozet olarak
+  görünüyor ve seçili durum butonu vurgulanıyor; aynı butona tekrar dokunmak
+  durumu "Yeni"ye geri alıyor. Güncelleme başarısız olursa uyarı gösteriliyor.
+  Ekranı aşağı çekince talepler yenileniyor.
+- Konut Devir ve Mevduat ekranlarında sekmelerin altındaki içerik, Bireysel ve
+  Ticari ekranlarla aynı üst boşluğu alıyor.
+
 ## Unreleased — Balon ödeme planı banka hesabıyla eşitlendi
 
 - Özel / balon ödeme planında otomatik taksitler artık her dönem **eşit** (bankaların yaptığı gibi); önceki sürüm özel ödemelerden sonra taksitleri kalan vadeye yeniden yayarak azaltıyordu. Tek bir uniform taksit, özel ödemeler dahil çizelgeyi vade sonunda sıfıra indirecek şekilde çözülüyor; son otomatik taksit yuvarlama farkını yutuyor. Gerçek bir İş Bankası ödeme planıyla kuruş kuruşuna doğrulandı.

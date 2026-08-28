@@ -237,7 +237,7 @@ const DepositScreen = ({ topContent }: { topContent?: React.ReactNode }) => {
           </View>
           {topContent}
 
-          <View style={styles.card}>
+          <View style={[styles.card, styles.firstCard]}>
             <Text style={styles.sectionTitle}>Mevduat Bilgileri</Text>
 
             <NumericInput
@@ -431,6 +431,11 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.title,
     fontWeight: '800',
+  },
+  firstCard: {
+    // Breathing room below the sticky tabs, matching the individual and
+    // commercial calculators.
+    marginTop: spacing.lg,
   },
   card: {
     backgroundColor: colors.surface,
