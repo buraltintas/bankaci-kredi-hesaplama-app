@@ -1,9 +1,7 @@
 # Changelog
 
-## Unreleased — OTA güncelleme, push tanısı ve talep/hesaplama düzeltmeleri
+## Unreleased — Push tanısı ve talep/hesaplama düzeltmeleri
 
-- EAS Update (OTA) eklendi: bundan sonra yalnızca JS içeren düzeltmeler tam
-  yeniden derleme gerektirmeden `eas update` ile cihazlara ulaşır.
 - Push kaydı başarısız olduğunda hata (hangi aşamada ve neden) Ayarlar'daki
   bildirim kartında gösteriliyor. iOS'ta cihazın sessizce hiç kaydolmamasının
   sebebini yüzeye çıkarmak için geçici bir tanı; sebep bulununca kaldırılacak.

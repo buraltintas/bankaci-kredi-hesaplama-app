@@ -58,10 +58,6 @@
         "projectId": "f5c8092a-cb6e-4bbc-b316-aad23f8d0e87"
       }
     },
-    "owner": "xewor",
-    "runtimeVersion": "1.0.0",
-    "updates": {
-      "url": "https://u.expo.dev/f5c8092a-cb6e-4bbc-b316-aad23f8d0e87"
-    }
+    "owner": "xewor"
   }
 }
