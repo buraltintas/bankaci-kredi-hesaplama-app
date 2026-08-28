@@ -53,7 +53,7 @@ type PushContextValue = {
   preferences: NotificationPreferences;
   setPreference: (
     category: NotificationCategory,
-    enabled: boolean
+    enabled: boolean,
   ) => Promise<void>;
   // Temporary diagnostic: the reason the last token registration failed, so an
   // iOS device that silently never registers can surface the cause on screen.
@@ -80,7 +80,7 @@ type RegistrationStage =
 
 const pushDiagnostic = (
   event: string,
-  details: Record<string, unknown> = {}
+  details: Record<string, unknown> = {},
 ) => {
   console.info(`[push] ${event}`, details);
 };
@@ -88,7 +88,7 @@ const pushDiagnostic = (
 const pushDiagnosticError = (
   event: string,
   error: unknown,
-  details: Record<string, unknown> = {}
+  details: Record<string, unknown> = {},
 ) => {
   const safeError =
     error instanceof APIError
@@ -100,7 +100,7 @@ const pushDiagnosticError = (
 };
 
 const permissionAllowsNotifications = (
-  permission: Notifications.NotificationPermissionsStatus
+  permission: Notifications.NotificationPermissionsStatus,
 ) =>
   permission.granted ||
   permission.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
@@ -133,7 +133,7 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
   const deviceTokenRef = useRef<string | null>(null);
   const registrationInFlightRef = useRef(false);
   const [registrationError, setRegistrationError] = useState<string | null>(
-    null
+    null,
   );
 
   useEffect(() => {
@@ -170,124 +170,137 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
     });
   }, []);
 
-  const register = useCallback(async (reason: string = 'manual') => {
-    pushDiagnostic('registration_started', {
-      platform: Platform.OS,
-      reason,
-      isDevice: Device.isDevice,
-      hasProjectId: Boolean(configuredProjectId),
-      authenticated: Boolean(session),
-    });
-    if (Platform.OS === 'web') {
-      pushDiagnostic('registration_skipped', { reason: 'web' });
-      return false;
-    }
-    if (!configuredProjectId) {
-      pushDiagnostic('registration_skipped', { reason: 'missing_project_id' });
-      setStatus('unavailable');
-      return false;
-    }
-    if (!Device.isDevice) {
-      pushDiagnostic('registration_skipped', { reason: 'not_physical_device' });
-      setStatus('unavailable');
-      return false;
-    }
-    if (registrationInFlightRef.current) {
-      pushDiagnostic('registration_skipped', {
-        reason: 'registration_in_flight',
-      });
-      return false;
-    }
-    registrationInFlightRef.current = true;
-    let stage: RegistrationStage = 'preflight';
-    try {
-      stage = 'android_channels';
-      await ensureAndroidChannels();
-      pushDiagnostic('android_channels_ready', { platform: Platform.OS });
-      stage = 'expo_token';
-      // On iOS the APNs device token is often not ready in the moment right
-      // after the permission grant, so a single getExpoPushTokenAsync call can
-      // throw ("no APNs token" / registration not yet complete). Retry with a
-      // short backoff instead of giving up on the first miss.
-      let result: Notifications.ExpoPushToken | undefined;
-      let lastTokenError: unknown;
-      for (let attempt = 0; attempt < 4; attempt += 1) {
-        try {
-          result = await Notifications.getExpoPushTokenAsync({
-            projectId: configuredProjectId,
-          });
-          break;
-        } catch (tokenError) {
-          lastTokenError = tokenError;
-          pushDiagnostic('expo_token_retry', {
-            platform: Platform.OS,
-            attempt,
-          });
-          if (attempt < 3) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, 1500 * (attempt + 1))
-            );
-          }
-        }
-      }
-      if (!result) {
-        throw lastTokenError ?? new Error('expo_token_unavailable');
-      }
-      const token = result.data;
-      pushDiagnostic('expo_token_created', {
-        platform: Platform.OS,
-        tokenPresent: token.length > 0,
-      });
-      const payload = {
-        token,
-        platform: Platform.OS,
-        deviceName: Device.deviceName ?? Device.modelName ?? Platform.OS,
-      };
-      // A signed-in device links to the account (so personal notifications can
-      // reach it); a guest device registers for broadcasts only.
-      const endpoint = session ? '/v1/me/push-devices' : '/v1/devices';
-      stage = 'backend_registration';
-      pushDiagnostic('backend_registration_started', {
-        endpoint,
-        authenticated: Boolean(session),
-      });
-      const nextPreferences = session
-        ? await apiRequest<NotificationPreferences>(endpoint, {
-            method: 'POST',
-            token: session.token,
-            body: payload,
-          })
-        : await apiRequest<NotificationPreferences>(endpoint, {
-            method: 'POST',
-            body: payload,
-          });
-      pushDiagnostic('backend_registration_succeeded', { endpoint });
-      stage = 'token_storage';
-      await setStoredExpoPushToken(token);
-      deviceTokenRef.current = token;
-      setPreferences(nextPreferences);
-      setStatus('enabled');
-      setRegistrationError(null);
-      return true;
-    } catch (error: unknown) {
-      pushDiagnosticError('registration_failed', error, {
+  const register = useCallback(
+    async (reason: string = 'manual') => {
+      pushDiagnostic('registration_started', {
         platform: Platform.OS,
         reason,
-        stage,
+        isDevice: Device.isDevice,
+        hasProjectId: Boolean(configuredProjectId),
         authenticated: Boolean(session),
       });
-      const detail =
-        error instanceof APIError
-          ? `API ${error.status}${error.code ? ` ${error.code}` : ''}`
-          : error instanceof Error
-            ? `${error.name}: ${error.message}`
-            : String(error);
-      setRegistrationError(`${stage} — ${detail}`);
-      return false;
-    } finally {
-      registrationInFlightRef.current = false;
-    }
-  }, [configuredProjectId, ensureAndroidChannels, session]);
+      if (Platform.OS === 'web') {
+        pushDiagnostic('registration_skipped', { reason: 'web' });
+        return false;
+      }
+      if (!configuredProjectId) {
+        pushDiagnostic('registration_skipped', {
+          reason: 'missing_project_id',
+        });
+        setStatus('unavailable');
+        return false;
+      }
+      if (!Device.isDevice) {
+        pushDiagnostic('registration_skipped', {
+          reason: 'not_physical_device',
+        });
+        setStatus('unavailable');
+        return false;
+      }
+      if (registrationInFlightRef.current) {
+        pushDiagnostic('registration_skipped', {
+          reason: 'registration_in_flight',
+        });
+        return false;
+      }
+      registrationInFlightRef.current = true;
+      let stage: RegistrationStage = 'preflight';
+      try {
+        stage = 'android_channels';
+        await ensureAndroidChannels();
+        pushDiagnostic('android_channels_ready', { platform: Platform.OS });
+        stage = 'expo_token';
+        // On iOS the APNs device token is often not ready in the moment right
+        // after the permission grant, so a single getExpoPushTokenAsync call can
+        // throw ("no APNs token" / registration not yet complete). Retry with a
+        // short backoff instead of giving up on the first miss.
+        let result: Notifications.ExpoPushToken | undefined;
+        let lastTokenError: unknown;
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          try {
+            console.log('[push] native_token_start');
+
+            const nativeToken = await Notifications.getDevicePushTokenAsync();
+
+            console.log('[push] native_token_created', nativeToken);
+
+            result = await Notifications.getExpoPushTokenAsync({
+              projectId: configuredProjectId,
+            });
+            break;
+          } catch (tokenError) {
+            lastTokenError = tokenError;
+            pushDiagnostic('expo_token_retry', {
+              platform: Platform.OS,
+              attempt,
+            });
+            if (attempt < 3) {
+              await new Promise((resolve) =>
+                setTimeout(resolve, 1500 * (attempt + 1)),
+              );
+            }
+          }
+        }
+        if (!result) {
+          throw lastTokenError ?? new Error('expo_token_unavailable');
+        }
+        const token = result.data;
+        pushDiagnostic('expo_token_created', {
+          platform: Platform.OS,
+          tokenPresent: token.length > 0,
+        });
+        const payload = {
+          token,
+          platform: Platform.OS,
+          deviceName: Device.deviceName ?? Device.modelName ?? Platform.OS,
+        };
+        // A signed-in device links to the account (so personal notifications can
+        // reach it); a guest device registers for broadcasts only.
+        const endpoint = session ? '/v1/me/push-devices' : '/v1/devices';
+        stage = 'backend_registration';
+        pushDiagnostic('backend_registration_started', {
+          endpoint,
+          authenticated: Boolean(session),
+        });
+        const nextPreferences = session
+          ? await apiRequest<NotificationPreferences>(endpoint, {
+              method: 'POST',
+              token: session.token,
+              body: payload,
+            })
+          : await apiRequest<NotificationPreferences>(endpoint, {
+              method: 'POST',
+              body: payload,
+            });
+        pushDiagnostic('backend_registration_succeeded', { endpoint });
+        stage = 'token_storage';
+        await setStoredExpoPushToken(token);
+        deviceTokenRef.current = token;
+        setPreferences(nextPreferences);
+        setStatus('enabled');
+        setRegistrationError(null);
+        return true;
+      } catch (error: unknown) {
+        pushDiagnosticError('registration_failed', error, {
+          platform: Platform.OS,
+          reason,
+          stage,
+          authenticated: Boolean(session),
+        });
+        const detail =
+          error instanceof APIError
+            ? `API ${error.status}${error.code ? ` ${error.code}` : ''}`
+            : error instanceof Error
+              ? `${error.name}: ${error.message}`
+              : String(error);
+        setRegistrationError(`${stage} — ${detail}`);
+        return false;
+      } finally {
+        registrationInFlightRef.current = false;
+      }
+    },
+    [configuredProjectId, ensureAndroidChannels, session],
+  );
 
   const enableNotifications = useCallback(async () => {
     if (Platform.OS === 'web') {
@@ -340,14 +353,14 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
       try {
         const saved = await apiRequest<NotificationPreferences>(
           '/v1/devices/preferences',
-          { method: 'PATCH', body: { token, ...next } }
+          { method: 'PATCH', body: { token, ...next } },
         );
         setPreferences(saved);
       } catch {
         setPreferences(previous); // roll back a change the server never took
       }
     },
-    [preferences]
+    [preferences],
   );
 
   useEffect(() => {
@@ -417,7 +430,13 @@ export const PushNotificationProvider = ({ children }: PropsWithChildren) => {
       setPreference,
       registrationError,
     }),
-    [enableNotifications, preferences, registrationError, setPreference, status]
+    [
+      enableNotifications,
+      preferences,
+      registrationError,
+      setPreference,
+      status,
+    ],
   );
   return <PushContext.Provider value={value}>{children}</PushContext.Provider>;
 };

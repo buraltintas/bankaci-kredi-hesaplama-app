@@ -1,3 +1,4 @@
+#import <Expo/EXAppDelegateWrapper.h>
 #import "AppDelegate.h"
 
 #import <React/RCTBundleURLProvider.h>
@@ -38,6 +39,24 @@
 - (BOOL)application:(UIApplication *)application continueUserActivity:(nonnull NSUserActivity *)userActivity restorationHandler:(nonnull void (^)(NSArray<id<UIUserActivityRestoring>> * _Nullable))restorationHandler
 {
   return [RCTLinkingManager application:application continueUserActivity:userActivity restorationHandler:restorationHandler];
+}
+
+- (void)application:(UIApplication *)application
+didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken
+{
+  EXAppDelegateWrapper *expoDelegate = [EXAppDelegateWrapper new];
+  [(id<UIApplicationDelegate>)expoDelegate
+    application:application
+    didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];
+}
+
+- (void)application:(UIApplication *)application
+didFailToRegisterForRemoteNotificationsWithError:(NSError *)error
+{
+  EXAppDelegateWrapper *expoDelegate = [EXAppDelegateWrapper new];
+  [(id<UIApplicationDelegate>)expoDelegate
+    application:application
+    didFailToRegisterForRemoteNotificationsWithError:error];
 }
 
 @end

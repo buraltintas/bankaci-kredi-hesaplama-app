@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "739974437648",
+    "project_id": "bankaci",
+    "storage_bucket": "bankaci.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:739974437648:android:ee09440e938b82ae74e395",
+        "android_client_info": {
+          "package_name": "com.xewor.bankacikredihesaplama"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCg0Z9P-sjL0baeHdGaANHXa-haik7vqg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

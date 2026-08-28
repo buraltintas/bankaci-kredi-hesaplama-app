@@ -71,6 +71,7 @@ jest.mock('expo-notifications', () => ({
     mockPushTokenListener.callback = callback;
     return { remove: jest.fn() };
   }),
+  getDevicePushTokenAsync: jest.fn(),
   getExpoPushTokenAsync: jest.fn(),
   getLastNotificationResponseAsync: jest.fn().mockResolvedValue(null),
   getPermissionsAsync: jest.fn(),
@@ -108,6 +109,10 @@ describe('PushNotificationProvider registration', () => {
     Notifications.getExpoPushTokenAsync as jest.MockedFunction<
       typeof Notifications.getExpoPushTokenAsync
     >;
+  const getDevicePushTokenMock =
+    Notifications.getDevicePushTokenAsync as jest.MockedFunction<
+      typeof Notifications.getDevicePushTokenAsync
+    >;
   const requestPermissionsMock =
     Notifications.requestPermissionsAsync as jest.MockedFunction<
       typeof Notifications.requestPermissionsAsync
@@ -120,6 +125,7 @@ describe('PushNotificationProvider registration', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest.spyOn(console, 'info').mockImplementation(() => undefined);
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
     mockUseAuth.mockReturnValue({ session: null });
@@ -130,6 +136,10 @@ describe('PushNotificationProvider registration', () => {
     }
     getPermissionsMock.mockResolvedValue(grantedPermission);
     requestPermissionsMock.mockResolvedValue(grantedPermission);
+    getDevicePushTokenMock.mockResolvedValue({
+      type: 'fcm',
+      data: 'native-test-token',
+    });
     getExpoPushTokenMock.mockResolvedValue({
       type: 'expo',
       data: 'ExpoPushToken[test]',

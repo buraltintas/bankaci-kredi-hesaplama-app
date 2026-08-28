@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Kredi Hesaplama",
+    "name": "Bankacı",
     "slug": "bankaci-kredi-hesaplama",
-    "version": "3.1.0",
+    "version": "3.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "myapp",
@@ -14,7 +14,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "16"
+      "buildNumber": "18"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +23,7 @@
       },
       "package": "com.xewor.bankacikredihesaplama",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 20
+      "versionCode": 22
     },
     "web": {
       "bundler": "metro",

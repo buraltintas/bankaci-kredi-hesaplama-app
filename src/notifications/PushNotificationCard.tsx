@@ -40,7 +40,6 @@ export const PushNotificationCard = () => {
     enableNotifications,
     preferences,
     setPreference,
-    registrationError,
   } = usePushNotifications();
   const enabled = status === 'enabled';
   const denied = status === 'denied';
@@ -81,12 +80,6 @@ export const PushNotificationCard = () => {
             </View>
           ))}
         </View>
-      ) : null}
-
-      {registrationError ? (
-        <Text style={styles.diagnostic} selectable>
-          Tanı: {registrationError}
-        </Text>
       ) : null}
 
       <TouchableOpacity
@@ -148,12 +141,6 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     lineHeight: 18,
     marginTop: 2,
-  },
-  diagnostic: {
-    color: colors.textMuted,
-    fontSize: typography.small,
-    lineHeight: 18,
-    marginBottom: spacing.md,
   },
   button: {
     alignItems: 'center',

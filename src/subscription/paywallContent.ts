@@ -12,7 +12,10 @@ export const PAYWALL_BENEFITS = [
   'Hiçbir reklam gösterilmez',
   'Konut kredisi devir hesaplama',
   'PDF ve paylaşım akışları beklemeden açılır',
-  'Tüm hesaplama özellikleri dahil',
+  'Tüm detaylı ödeme planı ve hesaplama özellikleri dahil',
+  'Öğle Arası’nda sosyal paylaşım yapabilme',
+  'Müşteri talep linki ve gelen talepleri yönetme',
+  'Kişisel notlar ve paylaşılabilir görseller',
 ] as const;
 
 /**

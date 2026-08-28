@@ -407,7 +407,7 @@ const LoginModal = ({
             </View>
             <TextInput
               accessibilityLabel="6 haneli giriş kodu"
-              autoComplete="one-time-code"
+              autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
               autoFocus
               caretHidden
               importantForAutofill="yes"
@@ -417,7 +417,7 @@ const LoginModal = ({
               onFocus={() => setIsInputFocused(true)}
               selectionColor="transparent"
               style={styles.codeInputCapture}
-              textContentType="oneTimeCode"
+              textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : undefined}
               value={code}
               onChangeText={(value) => setCode(value.replace(/\D/g, ''))}
             />
@@ -604,7 +604,11 @@ const styles = StyleSheet.create({
   },
   codeInputCapture: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
     color: 'transparent',
+    fontSize: 1,
+    opacity: 0,
+    padding: 0,
   },
   codeDigits: {
     alignItems: 'center',
